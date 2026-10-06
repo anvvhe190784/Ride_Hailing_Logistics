@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.time.Instant;
 
+@SuppressWarnings("unused")
 public record TelemetryRequest(
     @NotNull(message = "Latitude is required")
         @DecimalMin(value = "-90.0", message = "Latitude must be >= -90.0")

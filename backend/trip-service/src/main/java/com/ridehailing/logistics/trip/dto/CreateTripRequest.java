@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.util.UUID;
 
+@SuppressWarnings("unused")
 public record CreateTripRequest(
     @NotNull(message = "Quote ID is required") UUID quoteId,
     @NotBlank(message = "Idempotency key is required") String idempotencyKey,

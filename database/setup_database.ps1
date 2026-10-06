@@ -2,9 +2,9 @@
 # Database per Service Pattern: iam_db, driver_db, location_db, pricing_db, trip_db, payment_db
 
 param (
-    [string]$DbPassword = $(if ($env:PGPASSWORD) { $env:PGPASSWORD } else { "admin" })
+    [string]$DbPassword = $(if ($env:PGPASSWORD) { $env:PGPASSWORD } else { "admin" }) # pragma: allowlist-secret
 )
-$env:PGPASSWORD = $DbPassword
+$env:PGPASSWORD = $DbPassword # pragma: allowlist-secret
 $PSQL = "C:\Program Files\PostgreSQL\18\bin\psql.exe"
 $HOST_NAME = "127.0.0.1"
 $PORT = "5432"

@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 @Repository
+@SuppressWarnings("unused")
 public interface WalletRepository extends JpaRepository<Wallet, UUID> {
   Optional<Wallet> findByDriverId(UUID driverId);
 }

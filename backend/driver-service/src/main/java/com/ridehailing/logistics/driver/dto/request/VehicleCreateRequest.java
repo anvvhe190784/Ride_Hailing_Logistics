@@ -4,6 +4,7 @@ import com.ridehailing.logistics.common.domain.enums.VehicleType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
+@SuppressWarnings("unused")
 public record VehicleCreateRequest(
     @NotNull(message = "Vehicle type is required") VehicleType type,
     @NotBlank(message = "License plate is required") String licensePlate,

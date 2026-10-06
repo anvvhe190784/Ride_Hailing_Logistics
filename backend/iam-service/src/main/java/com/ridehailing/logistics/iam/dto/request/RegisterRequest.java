@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
+@SuppressWarnings("unused")
 public record RegisterRequest(
     @NotBlank(message = "Phone number is required")
         @Pattern(

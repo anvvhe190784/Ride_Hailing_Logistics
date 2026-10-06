@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 @Repository
+@SuppressWarnings("unused")
 public interface DriverLatestLocationRepository extends JpaRepository<DriverLatestLocation, UUID> {
 
   @Query(
