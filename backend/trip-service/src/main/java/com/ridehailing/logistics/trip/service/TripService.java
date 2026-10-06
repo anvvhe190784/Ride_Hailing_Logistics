@@ -6,6 +6,7 @@ import com.ridehailing.logistics.trip.dto.DriverOfferResponse;
 import com.ridehailing.logistics.trip.dto.TripDetailResponse;
 import java.util.UUID;
 
+@SuppressWarnings("unused")
 public interface TripService {
   TripDetailResponse createTrip(UUID customerId, CreateTripRequest request);
 

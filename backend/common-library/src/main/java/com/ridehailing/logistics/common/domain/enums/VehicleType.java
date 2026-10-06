@@ -1,5 +1,6 @@
 package com.ridehailing.logistics.common.domain.enums;
 
+@SuppressWarnings("unused")
 public enum VehicleType {
   BIKE,
   CAR_4_SEAT,

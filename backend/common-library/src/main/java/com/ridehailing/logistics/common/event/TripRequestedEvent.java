@@ -13,6 +13,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@SuppressWarnings("unused")
 public class TripRequestedEvent {
   private UUID tripId;
   private String tripCode;

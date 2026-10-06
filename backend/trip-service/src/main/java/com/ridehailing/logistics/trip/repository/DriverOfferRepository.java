@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 @Repository
+@SuppressWarnings("unused")
 public interface DriverOfferRepository extends JpaRepository<DriverOffer, UUID> {
   Optional<DriverOffer> findByTripIdAndDriverId(UUID tripId, UUID driverId);
 

@@ -12,6 +12,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@SuppressWarnings("unused")
 public class PaymentSucceededEvent {
   private UUID paymentId;
   private UUID tripId;

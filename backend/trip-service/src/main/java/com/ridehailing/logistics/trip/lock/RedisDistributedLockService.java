@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@SuppressWarnings("unused")
 public class RedisDistributedLockService {
 
   private final StringRedisTemplate redisTemplate;

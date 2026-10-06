@@ -1,7 +1,6 @@
 package com.ridehailing.logistics.payment.service;
 
 import com.ridehailing.logistics.common.domain.enums.PaymentMethod;
-import com.ridehailing.logistics.payment.domain.entity.Payment;
 import com.ridehailing.logistics.payment.domain.entity.Wallet;
 import com.ridehailing.logistics.payment.domain.entity.WalletEntry;
 import java.math.BigDecimal;
