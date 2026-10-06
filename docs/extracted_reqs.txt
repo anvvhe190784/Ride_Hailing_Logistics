@@ -1,0 +1,230 @@
+UI-CUS-001|Ứng dụng PHẢI cung cấp đăng ký, đăng nhập, quên mật khẩu và quản lý hồ sơ.
+UI-CUS-002|Màn hình đặt chuyến PHẢI cho phép chọn loại dịch vụ, điểm đón/lấy và điểm đến/giao trên bản đồ hoặc 
+UI-CUS-003|Trước khi xác nhận, ứng dụng PHẢI hiển thị quãng đường, ETA, báo giá, hệ số surge nếu có và thời hạn
+UI-CUS-004|Khi matching, ứng dụng PHẢI hiển thị trạng thái tìm tài xế và cho phép hủy theo chính sách.
+UI-CUS-005|Sau khi ghép, ứng dụng PHẢI hiển thị tối thiểu tên tài xế, phương tiện, biển số, ETA và vị trí phù h
+UI-CUS-006|Trong chuyến, ứng dụng PHẢI hiển thị trạng thái, vị trí tài xế và tuyến đường dự kiến.
+UI-CUS-007|Sau chuyến, ứng dụng PHẢI hiển thị chi tiết cước, phương thức/kết quả thanh toán và biên nhận.
+UI-CUS-008|Đối với giao hàng, ứng dụng PHẢI cho nhập thông tin người nhận và mô tả kiện hàng theo chính sách.
+UI-CUS-009|Hành động hủy hoặc thanh toán có ảnh hưởng tài chính PHẢI có bước xác nhận.
+UI-DRV-001|Tài xế PHẢI xem và hoàn thiện hồ sơ, phương tiện và giấy phép cần thiết.
+UI-DRV-002|Tài xế đủ điều kiện PHẢI có thể chuyển Online/Offline; ứng dụng phải giải thích khi không được chuyể
+UI-DRV-003|Đề nghị chuyến PHẢI hiển thị loại dịch vụ, điểm đón/lấy, khoảng cách tới điểm đón, giá/thu nhập dự k
+UI-DRV-004|Tài xế PHẢI có thể chấp nhận hoặc từ chối đề nghị chuyến.
+UI-DRV-005|Ứng dụng PHẢI hiển thị thông tin cần thiết để đến điểm đón/lấy và điểm đến/giao, không hiển thị PII 
+UI-DRV-006|Ứng dụng PHẢI cho tài xế thực hiện các chuyển trạng thái hợp lệ như đã đến, bắt đầu và hoàn tất.
+UI-DRV-007|Ứng dụng PHẢI hiển thị số dư ví, thu nhập chuyến, hoa hồng và lịch sử biến động.
+UI-DRV-008|Ứng dụng PHẢI cảnh báo khi mất kết nối, quyền vị trí bị tắt hoặc GPS không đủ độ chính xác.
+UI-ADM-001|Nhân viên PHẢI đăng nhập và chỉ nhìn thấy chức năng theo vai trò.
+UI-ADM-002|Màn hình xét duyệt tài xế PHẢI hiển thị hồ sơ, tài liệu, trạng thái và lịch sử quyết định.
+UI-ADM-003|Màn hình chuyến PHẢI hỗ trợ tìm theo mã chuyến, khách hàng, tài xế, loại dịch vụ, trạng thái và thời
+UI-ADM-004|Màn hình cấu hình giá PHẢI kiểm tra hiệu lực, vùng, loại dịch vụ và xung đột quy tắc.
+UI-ADM-005|Thao tác nhạy cảm PHẢI yêu cầu xác nhận và ghi audit.
+FR-IAM-001|Hệ thống PHẢI cho phép khách hàng và tài xế đăng ký bằng định danh được hỗ trợ.
+FR-IAM-002|Hệ thống PHẢI kiểm tra định dạng, chuẩn hóa và tính duy nhất của định danh đăng nhập.
+FR-IAM-003|Mật khẩu PHẢI tuân thủ chính sách và chỉ được lưu dưới dạng băm an toàn.
+FR-IAM-004|Hệ thống PHẢI hỗ trợ xác minh email/số điện thoại nếu chính sách yêu cầu.
+FR-IAM-005|Người dùng PHẢI đăng nhập được và nhận token có thời hạn phù hợp.
+FR-IAM-006|Hệ thống PHẢI giới hạn thử đăng nhập và không tiết lộ tài khoản có tồn tại khi xác thực thất bại.
+FR-IAM-007|Hệ thống PHẢI hỗ trợ refresh, đăng xuất, thu hồi phiên và đặt lại mật khẩu.
+FR-IAM-008|Người dùng PHẢI xem và cập nhật các trường hồ sơ được phép.
+FR-IAM-009|Hệ thống PHẢI hỗ trợ RBAC với tối thiểu Customer, Driver, Reviewer, SupportStaff, FinanceStaff và Ad
+FR-IAM-010|Mỗi endpoint/bản tin bảo vệ PHẢI kiểm tra danh tính, quyền và quyền sở hữu tài nguyên phía server.
+FR-IAM-011|Thay đổi vai trò, trạng thái tài khoản và thông tin định danh quan trọng PHẢI được audit.
+FR-DRV-001|Người đăng ký tài xế PHẢI cung cấp thông tin cá nhân, giấy phép lái xe, phương tiện và tài liệu bắt 
+FR-DRV-002|Hệ thống PHẢI kiểm tra trường bắt buộc, định dạng, thời hạn giấy tờ và loại tệp tải lên.
+FR-DRV-003|Hồ sơ tài xế PHẢI có trạng thái tối thiểu DRAFT, PENDING_REVIEW, APPROVED, REJECTED, SUSPENDED.
+FR-DRV-004|Tài xế PHẢI gửi hồ sơ hoàn chỉnh để xét duyệt và xem được trạng thái cùng lý do từ chối an toàn.
+FR-DRV-005|Nhân viên kiểm duyệt PHẢI có thể duyệt, từ chối hoặc yêu cầu bổ sung hồ sơ theo quyền.
+FR-DRV-006|Quyết định xét duyệt PHẢI ghi người thực hiện, thời điểm, lý do và phiên bản hồ sơ.
+FR-DRV-007|Mỗi phương tiện PHẢI có loại, biển số, thuộc tính nhận diện, trạng thái và liên kết tài xế.
+FR-DRV-008|Chỉ tài xế APPROVED, tài khoản hoạt động, tài liệu còn hiệu lực và phương tiện hợp lệ mới được Onlin
+FR-DRV-009|Trạng thái khả dụng của tài xế PHẢI gồm tối thiểu OFFLINE, AVAILABLE, OFFERED, BUSY.
+FR-DRV-010|Tài xế PHẢI có thể yêu cầu Online/Offline khi không vi phạm ràng buộc chuyến.
+FR-DRV-011|Tài xế không được chuyển Offline trong chuyến đang hoạt động, trừ quy trình sự cố được phép.
+FR-DRV-012|Khi một offer được dành riêng, trạng thái tài xế PHẢI chuyển nguyên tử để không nhận offer cạnh tran
+FR-DRV-013|Khi offer bị từ chối/hết hạn hoặc chuyến kết thúc, trạng thái tài xế PHẢI được cập nhật đúng một lần
+FR-DRV-014|Nếu tài xế mất tín hiệu quá ngưỡng cấu hình khi AVAILABLE, tài xế PHẢI bị loại khỏi tập ứng viên mat
+FR-LOC-001|Driver App PHẢI gửi telemetry khi tài xế Online hoặc đang thực hiện chuyến, theo chu kỳ cấu hình dự 
+FR-LOC-002|Bản tin PHẢI chứa tối thiểu driver ID từ phiên xác thực, latitude, longitude, device timestamp, accu
+FR-LOC-003|Hệ thống PHẢI kiểm tra latitude trong [-90, 90], longitude trong [-180, 180], timestamp hợp lý và độ
+FR-LOC-004|Hệ thống PHẢI từ chối hoặc đánh dấu nghi vấn bản tin sai định dạng, quá cũ, ở tương lai bất thường h
+FR-LOC-005|Hệ thống không được tin driver ID do payload tự khai nếu khác danh tính phiên.
+FR-LOC-006|Hệ thống PHẢI xử lý bản tin trùng hoặc đến sai thứ tự mà không ghi đè vị trí mới hơn bằng vị trí cũ.
+FR-LOC-007|Hệ thống PHẢI cập nhật vị trí mới nhất và chỉ mục không gian của tài xế đủ điều kiện.
+FR-LOC-008|Khi tài xế Offline, bị đình chỉ hoặc vị trí hết hạn, tài xế PHẢI bị loại khỏi truy vấn ứng viên.
+FR-LOC-009|Hệ thống PHẢI truy vấn tài xế phù hợp trong bán kính, có thể mở rộng bán kính theo chiến lược matchi
+FR-LOC-010|Kết quả truy vấn PHẢI gồm khoảng cách ước tính, độ mới vị trí, trạng thái và thuộc tính phương tiện 
+FR-LOC-011|Khách hàng chỉ được nhận vị trí chính xác của tài xế sau khi được ghép và trong thời gian cần thiết 
+FR-LOC-012|Tài xế chỉ được nhận vị trí khách hàng/điểm lấy khi đã được gửi offer hoặc ghép theo chính sách.
+FR-LOC-013|Khi mất kết nối ngắn hạn, Driver App PHẢI có thể gửi bù dữ liệu cần thiết nhưng Hệ thống phải phân b
+FR-LOC-014|Hệ thống PHẢI phát cập nhật vị trí cho đúng người tham gia chuyến qua kênh đã xác thực.
+FR-PRI-001|Quản trị viên có quyền PHẢI cấu hình bảng giá theo loại dịch vụ, vùng và khoảng hiệu lực.
+FR-PRI-002|Bảng giá PHẢI hỗ trợ tối thiểu giá mở cửa, giá theo khoảng cách, giá theo thời gian và mức cước tối 
+FR-PRI-003|Các khoản phí bổ sung và thuế, nếu có, PHẢI được cấu hình và thể hiện riêng trong báo giá.
+FR-PRI-004|Hệ thống PHẢI kiểm tra xung đột giữa các quy tắc cùng loại dịch vụ, vùng và thời gian hiệu lực.
+FR-PRI-005|Pricing Service PHẢI lấy khoảng cách tuyến và ETA từ nhà cung cấp bản đồ hoặc cơ chế ước tính được p
+FR-PRI-006|Nếu không xác định được tuyến hợp lệ, Hệ thống PHẢI từ chối báo giá với lỗi rõ ràng hoặc dùng fallba
+FR-PRI-007|Hệ thống PHẢI tính chỉ số nhu cầu và nguồn cung theo vùng không gian và cửa sổ thời gian cấu hình.
+FR-PRI-008|Nhu cầu PHẢI dựa trên số yêu cầu chuyến hợp lệ; nguồn cung PHẢI dựa trên số tài xế AVAILABLE có vị t
+FR-PRI-009|Hệ số surge PHẢI được xác định bằng quy tắc có phiên bản, giới hạn dưới/trên và không được âm.
+FR-PRI-010|Báo giá PHẢI hiển thị rõ khi surge > 1 và yêu cầu khách hàng xác nhận trước khi đặt chuyến.
+FR-PRI-011|Cùng dữ liệu đầu vào và cùng phiên bản quy tắc PHẢI cho kết quả tính giá xác định, trong giới hạn là
+FR-PRI-012|Thay đổi quy tắc giá/surge PHẢI được audit và không làm thay đổi báo giá đã phát hành còn được chấp 
+FR-PRI-013|Báo giá PHẢI có quote ID, loại dịch vụ, điểm đi/đến chuẩn hóa, khoảng cách, ETA, thành phần giá, sur
+FR-PRI-014|Quote ID PHẢI gắn với khách hàng và không được người khác sử dụng.
+FR-PRI-015|Hệ thống PHẢI từ chối quote hết hạn, bị sửa hoặc không khớp loại dịch vụ/điểm đi/đến khi tạo chuyến.
+FR-PRI-016|Đơn vị tiền PHẢI dùng decimal chính xác hoặc số nguyên đơn vị nhỏ nhất; không dùng floating-point nh
+FR-PRI-017|Hệ thống PHẢI tính cước cuối cùng theo chính sách đã phê duyệt và lưu đầy đủ thành phần, quy tắc, dữ
+FR-PRI-018|Cước cuối cùng không được tự động áp dụng hệ số surge khác với hệ số khách đã xác nhận, trừ điều kiệ
+FR-TRIP-001|Khách hàng đã xác thực PHẢI có thể tạo chuyến RIDE hoặc DELIVERY từ quote còn hiệu lực.
+FR-TRIP-002|Yêu cầu tạo chuyến PHẢI có Idempotency-Key; gửi lặp cùng khóa và payload không được tạo chuyến mới.
+FR-TRIP-003|Hệ thống PHẢI kiểm tra tài khoản, điểm đi/đến, quote, loại dịch vụ, phương thức thanh toán và hạn ch
+FR-TRIP-004|Chuyến PHẢI có mã duy nhất, customer ID, loại dịch vụ, các điểm, quote snapshot, phương thức thanh t
+FR-TRIP-005|Với giao hàng, Hệ thống PHẢI lưu snapshot người nhận và kiện hàng ở mức tối thiểu cần thiết.
+FR-TRIP-006|Sau khi tạo, chuyến PHẢI chuyển từ CREATED sang MATCHING và bắt đầu quy trình tìm tài xế.
+FR-TRIP-007|Hệ thống PHẢI ngăn một khách hàng tạo nhiều chuyến hoạt động xung đột theo chính sách.
+FR-MAT-001|Matching Engine PHẢI lấy ứng viên AVAILABLE có vị trí còn mới trong bán kính ban đầu cấu hình được.
+FR-MAT-002|Ứng viên PHẢI phù hợp loại dịch vụ, phương tiện, vùng hoạt động và điều kiện hồ sơ.
+FR-MAT-003|Hệ thống PHẢI xếp hạng ứng viên dựa trên tối thiểu khoảng cách/ETA tới điểm đón; tiêu chí bổ sung ph
+FR-MAT-004|Tìm kiếm NÊN mở rộng bán kính theo từng vòng khi không có ứng viên, đến giới hạn cấu hình.
+FR-MAT-005|Hệ thống PHẢI loại tài xế có vị trí hết hạn, đang có chuyến hoặc đang bị giữ cho offer không tương t
+FR-MAT-006|Matching Engine PHẢI đạt mục tiêu độ trễ quy định tại NFR-PERF-003.
+FR-MAT-007|Hệ thống PHẢI tạo offer có offer ID, trip ID, driver ID, thông tin chuyến được phép, thời điểm tạo v
+FR-MAT-008|Offer PHẢI được gửi tới đúng phiên tài xế qua kênh thời gian thực; không được phát thông tin khách h
+FR-MAT-009|Tài xế PHẢI có thể chấp nhận hoặc từ chối trước khi offer hết hạn.
+FR-MAT-010|Chấp nhận offer PHẢI là thao tác nguyên tử kiểm tra đồng thời trạng thái trip, offer và driver.
+FR-MAT-011|Chỉ một tài xế được thắng cho một chuyến và chỉ một chuyến được gán cho một tài xế tại cùng thời điể
+FR-MAT-012|Yêu cầu chấp nhận lặp cho offer đã thắng PHẢI trả cùng kết quả logic; offer thua/hết hạn phải trả lỗ
+FR-MAT-013|Khi offer bị từ chối/hết hạn, Hệ thống PHẢI tiếp tục ứng viên/vòng matching kế tiếp nếu còn điều kiệ
+FR-MAT-014|Khi ghép thành công, trip PHẢI chuyển ACCEPTED, driver chuyển BUSY, các offer khác bị hủy và hai bên
+FR-MAT-015|Nếu không tìm được tài xế sau giới hạn, trip PHẢI chuyển trạng thái phù hợp và khách hàng được thông
+FR-TRIP-008|Hệ thống PHẢI kiểm soát mọi chuyển trạng thái theo state machine và từ chối bước chuyển không hợp lệ
+FR-TRIP-009|Mỗi chuyển trạng thái PHẢI kiểm tra actor, quyền, trạng thái hiện tại và điều kiện nghiệp vụ.
+FR-TRIP-010|Mỗi chuyển trạng thái PHẢI ghi trạng thái cũ/mới, actor, lý do, thời điểm và vị trí liên quan nếu đư
+FR-TRIP-011|Tài xế được gán PHẢI có thể chuyển lần lượt ACCEPTED → PICKING_UP → ARRIVED → IN_TRIP → COMPLETED.
+FR-TRIP-012|Bắt đầu chuyến PHẢI yêu cầu tài xế đã đến và có xác nhận khách hàng/mã xác nhận nếu chính sách bật.
+FR-TRIP-013|Hoàn tất giao hàng PHẢI hỗ trợ bằng chứng giao theo cấu hình như mã OTP, ảnh hoặc chữ ký; loại bằng 
+FR-TRIP-014|Khi COMPLETED, hệ thống PHẢI chốt dữ liệu chuyến, yêu cầu tính cước cuối và phát TripCompleted đúng 
+FR-TRIP-015|Khách hàng/tài xế PHẢI xem được trạng thái hiện tại và lịch sử các chuyến thuộc mình.
+FR-CAN-001|Khách hàng và tài xế PHẢI có thể yêu cầu hủy ở các trạng thái được chính sách cho phép.
+FR-CAN-002|Hệ thống PHẢI yêu cầu mã lý do hủy và có thể nhận mô tả bổ sung.
+FR-CAN-003|Hệ thống PHẢI xác định phí hủy dựa trên actor, trạng thái, thời gian chờ và quy tắc hiệu lực.
+FR-CAN-004|Trước khi xác nhận hủy có phí, Hệ thống PHẢI hiển thị phí dự kiến cho tác nhân nếu có thể.
+FR-CAN-005|Hủy thành công PHẢI chuyển trip CANCELLED, giải phóng driver, hủy offer còn lại và kích hoạt thanh t
+FR-CAN-006|Yêu cầu hủy lặp PHẢI idempotent và không thu/hoàn phí nhiều lần.
+FR-CAN-007|Nhân viên hỗ trợ có quyền PHẢI có thể hủy theo quy trình ngoại lệ, bắt buộc ghi lý do và audit.
+FR-RT-001|Sau khi ghép, Customer App PHẢI đăng ký được kênh realtime của chuyến thuộc mình.
+FR-RT-002|Driver App PHẢI nhận thay đổi trạng thái, hủy và thông tin cần thiết của chuyến đang được gán.
+FR-RT-003|Hệ thống PHẢI gửi vị trí tài xế cho khách hàng với độ trễ mục tiêu quy định tại NFR-PERF-001.
+FR-RT-004|Hệ thống PHẢI gửi event thay đổi trạng thái cho cả hai bên theo đúng quyền.
+FR-RT-005|Khi reconnect, client PHẢI lấy snapshot trạng thái hiện tại trước khi tiếp tục áp dụng event mới.
+FR-RT-006|Client PHẢI dùng sequence/version để bỏ qua bản tin trùng hoặc cũ.
+FR-RT-007|Nếu realtime tạm thời không khả dụng, client PHẢI có thể lấy trạng thái hiện tại qua API.
+FR-RT-008|Sau khi chuyến kết thúc hoặc bị hủy và qua thời gian ân hạn, người dùng không còn được subscribe vị 
+FR-PAY-001|Hệ thống PHẢI tạo payment record gắn với trip, customer, amount, currency, method và trạng thái.
+FR-PAY-002|Số tiền thanh toán PHẢI lấy từ cước cuối cùng đã chốt, không tin số tiền do client gửi.
+FR-PAY-003|Khởi tạo và xác nhận thanh toán PHẢI idempotent theo trip/payment attempt.
+FR-PAY-004|Tích hợp điện tử PHẢI xác minh kết quả với nhà cung cấp trước khi ghi nhận thành công.
+FR-PAY-005|Callback lặp hoặc sai thứ tự PHẢI không tạo thu tiền hoặc ghi nhận giao dịch trùng.
+FR-PAY-006|Hệ thống PHẢI lưu provider reference, trạng thái, số tiền, currency và thời điểm; không lưu dữ liệu 
+FR-PAY-007|Các trạng thái tối thiểu gồm PENDING, SUCCEEDED, FAILED, REFUND_PENDING, REFUNDED và PARTIALLY_REFUN
+FR-PAY-008|Khi thanh toán thất bại, Hệ thống PHẢI thể hiện khoản phải thu và cho phép thử lại theo chính sách m
+FR-WAL-001|Mỗi tài xế được duyệt PHẢI có một ví theo loại tiền tệ được hỗ trợ.
+FR-WAL-002|Ví PHẢI dùng ledger bất biến; số dư là kết quả của các bút toán hợp lệ, không chỉnh trực tiếp không 
+FR-WAL-003|Khi chuyến hoàn tất và đủ điều kiện, Hệ thống PHẢI tính tổng cước, hoa hồng nền tảng, khoản điều chỉ
+FR-WAL-004|Công thức hoa hồng PHẢI có phiên bản, loại dịch vụ, vùng và thời gian hiệu lực.
+FR-WAL-005|Ghi có thu nhập tài xế và ghi nhận hoa hồng PHẢI idempotent theo trip.
+FR-WAL-006|Mỗi bút toán PHẢI có entry ID, wallet ID, loại, số tiền có dấu, currency, reference, trạng thái và t
+FR-WAL-007|Tài xế PHẢI xem được số dư và lịch sử biến động của ví mình.
+FR-WAL-008|Không được dùng floating-point nhị phân cho số tiền và số dư.
+FR-WAL-009|Số dư khả dụng không được âm trừ khi chính sách tín dụng/nợ được phê duyệt rõ ràng.
+FR-WAL-010|Rút tiền khỏi ví tài xế là TBD và ngoài phạm vi mặc định của phiên bản 1.0.
+FR-PAY-009|Nhân viên tài chính có quyền PHẢI có thể yêu cầu hoàn tiền toàn phần/một phần theo chính sách.
+FR-PAY-010|Tổng hoàn lũy kế không được vượt số tiền đã thu thành công.
+FR-PAY-011|Hoàn tiền PHẢI idempotent, có lý do, người yêu cầu và liên kết giao dịch gốc.
+FR-PAY-012|Điều chỉnh ví PHẢI tạo bút toán bù, không sửa/xóa bút toán đã ghi sổ.
+FR-PAY-013|Kết quả hoàn tiền/điều chỉnh PHẢI cập nhật lịch sử hiển thị cho đúng chủ sở hữu.
+FR-EVT-001|Khi ghép chuyến, đổi trạng thái, hoàn tất, hủy và thanh toán, service sở hữu PHẢI phát domain event 
+FR-EVT-002|Thay đổi nghiệp vụ và event chờ phát PHẢI được ghi nguyên tử bằng Outbox hoặc cơ chế tương đương.
+FR-EVT-003|Event PHẢI tuân thủ COM-009 và có version schema.
+FR-EVT-004|Consumer PHẢI idempotent theo event ID hoặc business key.
+FR-EVT-005|Lỗi tạm thời PHẢI được thử lại có giới hạn; lỗi nghiệp vụ không được thử vô hạn.
+FR-EVT-006|Event đến sai thứ tự PHẢI được xử lý an toàn dựa trên aggregate version/state transition.
+FR-EVT-007|Payment/Wallet không khả dụng tạm thời không được làm mất kết quả TripCompleted; giao dịch phải được
+FR-EVT-008|Hệ thống PHẢI cung cấp khả năng xác định các event/giao dịch không xử lý được để người có quyền xử l
+FR-ADM-001|Nhân viên hỗ trợ PHẢI tra cứu chuyến theo mã chuyến, khách hàng, tài xế, trạng thái và khoảng thời g
+FR-ADM-002|Nhân viên chỉ được xem dữ liệu cần thiết cho nhiệm vụ và theo quyền được cấp.
+FR-ADM-003|Quản trị viên có quyền PHẢI quản lý vai trò và quyền.
+FR-ADM-004|Tác vụ thay đổi hồ sơ tài xế, bảng giá, chuyến, thanh toán, ví và quyền PHẢI được audit.
+FR-ADM-005|Audit PHẢI chứa actor, action, target, kết quả, timestamp, correlation ID và before/after hoặc delta
+FR-ADM-006|Audit record không được người dùng nghiệp vụ sửa hoặc xóa.
+FR-ADM-007|Các danh sách lớn PHẢI hỗ trợ phân trang, lọc và giới hạn kích thước trang.
+DR-GEO-001|Hệ tọa độ chuẩn cho giao tiếp là WGS84 với latitude/longitude; biến đổi hệ tọa độ phải được ghi rõ.
+DR-GEO-002|Độ chính xác, timestamp và nguồn dữ liệu PHẢI đi cùng tọa độ khi khả dụng.
+DR-GEO-003|Vị trí mới nhất dùng cho matching PHẢI có TTL/tiêu chí độ mới cấu hình được.
+DR-GEO-004|Telemetry lịch sử chỉ được lưu ở độ chi tiết và thời hạn cần thiết cho nghiệp vụ đã công bố.
+DR-GEO-005|Spatial index là dữ liệu dẫn xuất từ vị trí hợp lệ; PHẢI có cách loại dữ liệu hết hạn và tái tạo khi
+DR-GEO-006|Không được dùng vị trí có accuracy vượt ngưỡng cho quyết định nhạy cảm mà không có cơ chế xác nhận/f
+DR-VAL-001|Server PHẢI kiểm tra kiểu, độ dài, phạm vi, enum, định dạng và quyền sở hữu của mọi dữ liệu đầu vào.
+DR-VAL-002|Địa chỉ tìm kiếm/geocoding PHẢI lưu cả chuỗi hiển thị và tọa độ chuẩn hóa cần thiết.
+DR-VAL-003|Biển số, email và số điện thoại PHẢI được chuẩn hóa trước khi kiểm tra duy nhất theo quy tắc miền.
+DR-VAL-004|Tệp tài liệu/ảnh PHẢI kiểm tra MIME thực, dung lượng, phần mở rộng và nội dung nguy hiểm.
+DR-VAL-005|API nhạy cảm PHẢI ngăn mass assignment và bỏ qua/từ chối trường không được phép.
+DR-VAL-006|Dữ liệu từ bản đồ và thanh toán bên ngoài PHẢI được kiểm tra schema trước khi dùng.
+DR-PRV-001|Hệ thống PHẢI thu thập vị trí theo nguyên tắc tối thiểu cần thiết và có thông báo/đồng ý phù hợp.
+DR-PRV-002|Vị trí chính xác chỉ được chia sẻ cho người tham gia chuyến và nhân viên có quyền trong thời gian cầ
+DR-PRV-003|Tài liệu định danh, giấy phép, thông tin liên hệ và vị trí lịch sử PHẢI được phân loại là dữ liệu nh
+DR-PRV-004|API và nội dung hiển thị PHẢI che PII khi không cần đầy đủ.
+DR-PRV-005|Chính sách lưu giữ theo loại dữ liệu phải được phê duyệt; thời hạn cụ thể là TBD.
+DR-PRV-006|Yêu cầu truy cập/xóa/ẩn danh dữ liệu cá nhân PHẢI tuân thủ chính sách và bảo toàn nghĩa vụ lưu giao 
+NFR-PERF-001|Trong điều kiện mạng kiểm thử chuẩn, 95% cập nhật vị trí hợp lệ từ khi server nhận đến khi Customer 
+NFR-PERF-002|Location Service PHẢI xử lý ổn định telemetry của ít nhất 100 tài xế mô phỏng gửi mỗi 3 giây trong b
+NFR-PERF-003|95% yêu cầu tìm danh sách ứng viên trong vùng dữ liệu chuẩn PHẢI hoàn thành ≤ 200 ms; truy vấn spati
+NFR-PERF-004|95% API nghiệp vụ đọc thông thường PHẢI phản hồi ≤ 500 ms và ghi thông thường ≤ 1.000 ms, không tính
+NFR-PERF-005|95% yêu cầu tạo quote PHẢI hoàn thành ≤ 2 giây khi nhà cung cấp bản đồ đáp ứng trong SLA giả lập.
+NFR-PERF-006|Hệ thống PHẢI trả kết quả matching thành công hoặc không tìm thấy trong thời hạn tối đa cấu hình; gi
+NFR-PERF-007|Với 100 yêu cầu chấp nhận đồng thời cùng một offer/trip hoặc nhiều trip tranh chấp một driver, chỉ m
+NFR-PERF-008|Danh sách và lịch sử PHẢI phân trang; không cho phép truy vấn không giới hạn.
+NFR-REL-001|Mất kết nối WebSocket không được làm mất trạng thái chuyến đã xác nhận; client phải đồng bộ lại từ s
+NFR-REL-002|Bản tin vị trí trùng/sai thứ tự không được làm lùi vị trí mới nhất.
+NFR-REL-003|Không được gán một tài xế cho hai chuyến hoạt động hoặc hai tài xế thắng cùng một chuyến.
+NFR-REL-004|Không được mất TripCompleted, thanh toán thành công hoặc bút toán ví sau khi hệ thống xác nhận kết q
+NFR-REL-005|Giao tiếp với bản đồ/thanh toán PHẢI có timeout và retry có giới hạn cho thao tác an toàn/idempotent
+NFR-REL-006|Sự cố Pricing Service sau khi quote hợp lệ đã được snapshot không được làm thay đổi quote đã chấp nh
+NFR-REL-007|Sự cố Payment/Wallet tạm thời không được làm mất trạng thái chuyến hoàn tất; khoản tài chính phải đư
+NFR-REL-008|Các tác vụ nền và consumer PHẢI tiếp tục được sau khi khởi động lại mà không tạo hiệu ứng trùng.
+NFR-SEC-001|Toàn bộ giao tiếp công khai PHẢI dùng HTTPS/WSS với TLS 1.2 trở lên.
+NFR-SEC-002|Mật khẩu PHẢI băm bằng Argon2id, bcrypt hoặc thuật toán được chấp nhận với tham số phù hợp.
+NFR-SEC-003|Token, API key, khóa ký và credential PHẢI được bảo vệ, xoay vòng được và không ghi cứng trong mã ng
+NFR-SEC-004|Hệ thống PHẢI thực thi least privilege và kiểm tra object-level/function-level authorization ở serve
+NFR-SEC-005|Token WebSocket PHẢI được xác minh, có thời hạn và ràng buộc phiên/người dùng theo hợp đồng.
+NFR-SEC-006|Hệ thống PHẢI chống injection, XSS, CSRF khi áp dụng, SSRF, path traversal, insecure deserialization
+NFR-SEC-007|Endpoint đăng nhập, telemetry, quote, tạo chuyến, offer, payment và upload PHẢI có giới hạn tần suất
+NFR-SEC-008|Dữ liệu giấy phép, định danh, vị trí và tài chính nhạy cảm PHẢI được mã hóa khi truyền và bảo vệ khi
+NFR-SEC-009|Log lỗi không được chứa password, token, khóa, dữ liệu thẻ, tài liệu đầy đủ hoặc vị trí/PII không cầ
+NFR-SEC-010|Callback thanh toán PHẢI xác minh chữ ký, timestamp/replay protection và đối chiếu trip, amount, cur
+NFR-SEC-011|Upload PHẢI tuân thủ DR-VAL-004 và không được lưu tại vùng có thể thực thi.
+NFR-SEC-012|Client không được tự quyết định giá, trạng thái chuyến, driver assignment, payment success hoặc wall
+NFR-SEC-013|Các thư viện phụ thuộc PHẢI được kiểm tra lỗ hổng trước khi phát hành.
+NFR-PRV-001|Ứng dụng PHẢI giải thích mục đích dùng vị trí và yêu cầu quyền theo cơ chế hệ điều hành.
+NFR-PRV-002|Hệ thống không được chia sẻ vị trí tài xế với khách hàng chưa được ghép hoặc sau khi quyền theo dõi 
+NFR-PRV-003|Tài xế không được truy cập vị trí liên hệ của chuyến không được gán.
+NFR-PRV-004|Nhân viên chỉ được xem vị trí lịch sử khi có mục đích hỗ trợ được phép; việc truy cập PHẢI được audi
+NFR-PRV-005|Dữ liệu vị trí dùng cho phân tích NÊN được tổng hợp hoặc ẩn danh khi không cần định danh.
+NFR-PRV-006|Chức năng giả lập/chống gian lận vị trí nâng cao là ngoài phạm vi, nhưng dữ liệu bất thường PHẢI đượ
+NFR-USA-001|Các luồng đặt/nhận chuyến chính PHẢI tối ưu cho thiết bị di động và thao tác tối thiểu khi đang di c
+NFR-USA-002|Trạng thái MATCHING, offer hết hạn, mất kết nối, GPS yếu và thanh toán đang xử lý PHẢI được thể hiện
+NFR-USA-003|Nút tạo chuyến, nhận chuyến và thanh toán PHẢI chống thao tác lặp ở UI; server vẫn phải idempotent.
+NFR-USA-004|Tiền, khoảng cách, thời gian, địa chỉ và trạng thái PHẢI hiển thị nhất quán.
+NFR-USA-005|Thông báo lỗi PHẢI hướng dẫn hành động tiếp theo và không lộ chi tiết nội bộ.
+NFR-USA-006|Các luồng cốt lõi NÊN đáp ứng hướng dẫn accessibility của nền tảng di động.
+NFR-MNT-001|REST API PHẢI có OpenAPI; gRPC phải có .proto; event phải có schema và version.
+NFR-MNT-002|Thay đổi không tương thích PHẢI tạo version mới hoặc có kế hoạch chuyển đổi được phê duyệt.
+NFR-MNT-003|Logic state machine, matching, pricing, payment và wallet PHẢI có unit test tự động.
+NFR-MNT-004|Ranh giới bounded context PHẢI rõ; không dùng shared database làm cơ chế tích hợp.
+NFR-MNT-005|Cấu hình bảng giá, bán kính, timeout offer, độ mới vị trí và chu kỳ telemetry không được ghi cứng tr
+NFR-MNT-006|Database migration PHẢI được version hóa và có phương án xử lý khi nâng cấp không thành công.
+NFR-COMP-001|API PHẢI duy trì tương thích ngược trong cùng major version.
+NFR-COMP-002|Consumer NÊN bỏ qua trường event chưa biết khi an toàn; producer không được xóa/đổi nghĩa trường bắt
+NFR-COMP-003|Mobile App cũ trong khoảng hỗ trợ PHẢI nhận thông báo nâng cấp rõ ràng nếu API version không còn đượ
