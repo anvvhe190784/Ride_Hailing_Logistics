@@ -1,0 +1,12 @@
+rootProject.name = 'ride-hailing-logistics'
+
+include 'common-library'
+include 'discovery-service'
+include 'config-service'
+include 'api-gateway'
+include 'iam-service'
+include 'driver-service'
+include 'location-service'
+include 'pricing-service'
+include 'trip-service'
+include 'payment-service'

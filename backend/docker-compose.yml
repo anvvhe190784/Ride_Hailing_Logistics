@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  # ============================================================================
+  # POSTGRESQL (PostGIS)
+  # ============================================================================
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: ride_hailing_postgres
+    environment:
+      POSTGRES_DB: ride_hailing_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: admin
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../database/init_db.sql:/docker-entrypoint-initdb.d/00_init_db.sql
+      - ../database/migrations:/docker-entrypoint-initdb.d/migrations
+    networks:
+      - ride_hailing_net
+
+  # ============================================================================
+  # REDIS (Cache & Distributed Lock - Session 11)
+  # ============================================================================
+  redis:
+    image: redis:7.2-alpine
+    container_name: ride_hailing_redis
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    networks:
+      - ride_hailing_net
+
+  # ============================================================================
+  # APACHE KAFKA (KRaft mode - Session 10)
+  # ============================================================================
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: ride_hailing_kafka
+    ports:
+      - "9092:9092"
+      - "9094:9094"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:29093'
+      KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093,PLAINTEXT_HOST://0.0.0.0:9092'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
+      CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - ride_hailing_net
+
+networks:
+  ride_hailing_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  kafka_data:
