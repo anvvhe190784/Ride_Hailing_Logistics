@@ -19,7 +19,7 @@ spring:
     properties:
       hibernate:
         default_schema: pricing
-        dialect: org.hibernate.spatial.dialect.postgis.PostgisDialect
+        dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
 
 eureka:

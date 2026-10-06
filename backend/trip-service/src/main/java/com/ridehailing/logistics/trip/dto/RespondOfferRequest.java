@@ -1,5 +1,3 @@
 package com.ridehailing.logistics.trip.dto;
 
-public record RespondOfferRequest(
-        boolean accept
-) {}
+public record RespondOfferRequest(boolean accept) {}

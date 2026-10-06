@@ -53,9 +53,9 @@ subprojects {
     tasks.withType(JavaCompile).configureEach {
         options.encoding = 'UTF-8'
         options.compilerArgs.addAll([
-            '-parameters',
-            '-Amapstruct.suppressGeneratorTimestamp=true',
-            '-Amapstruct.defaultComponentModel=spring'
+                '-parameters',
+                '-Amapstruct.suppressGeneratorTimestamp=true',
+                '-Amapstruct.defaultComponentModel=spring'
         ])
     }
 

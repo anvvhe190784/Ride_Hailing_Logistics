@@ -17,12 +17,12 @@ spring:
         - id: iam-service-route
           uri: lb://iam-service
           predicates:
-            - Path=/api/v1/auth/**, /api/v1/users/**
+            - Path=/api/v1/auth/**,/api/v1/users/**
 
         - id: driver-service-route
           uri: lb://driver-service
           predicates:
-            - Path=/api/v1/drivers/**, /api/v1/vehicles/**
+            - Path=/api/v1/drivers/**,/api/v1/vehicles/**
 
         - id: location-service-route
           uri: lb://location-service
@@ -32,17 +32,17 @@ spring:
         - id: pricing-service-route
           uri: lb://pricing-service
           predicates:
-            - Path=/api/v1/pricing/**, /api/v1/quotes/**
+            - Path=/api/v1/pricing/**,/api/v1/quotes/**
 
         - id: trip-service-route
           uri: lb://trip-service
           predicates:
-            - Path=/api/v1/trips/**, /api/v1/offers/**
+            - Path=/api/v1/trips/**,/api/v1/offers/**
 
         - id: payment-service-route
           uri: lb://payment-service
           predicates:
-            - Path=/api/v1/payments/**, /api/v1/wallets/**
+            - Path=/api/v1/payments/**,/api/v1/wallets/**
 
 eureka:
   client:

@@ -5,13 +5,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
 public record VehicleCreateRequest(
-        @NotNull(message = "Vehicle type is required")
-        VehicleType type,
-
-        @NotBlank(message = "License plate is required")
-        String licensePlate,
-
-        String brand,
-        String model,
-        String color
-) {}
+    @NotNull(message = "Vehicle type is required") VehicleType type,
+    @NotBlank(message = "License plate is required") String licensePlate,
+    String brand,
+    String model,
+    String color) {}

@@ -4,4 +4,5 @@
 -- ============================================================================
 
 SELECT 'CREATE DATABASE ride_hailing_db'
-WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'ride_hailing_db')\gexec
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'ride_hailing_db')
+\gexec
