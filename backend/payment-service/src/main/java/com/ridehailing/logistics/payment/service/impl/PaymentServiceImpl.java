@@ -116,16 +116,20 @@ public class PaymentServiceImpl implements PaymentService {
   @Override
   @Transactional(readOnly = true)
   public Wallet getWalletByDriver(UUID driverId) {
-    return walletRepository
-        .findByDriverId(driverId)
-        .orElseThrow(
-            () -> BaseDomainException.notFound("WALLET_NOT_FOUND", "Driver wallet not found"));
+    return findWalletOrThrow(driverId);
   }
 
   @Override
   @Transactional(readOnly = true)
   public List<WalletEntry> getWalletStatement(UUID driverId) {
-    Wallet wallet = getWalletByDriver(driverId);
+    Wallet wallet = findWalletOrThrow(driverId);
     return walletEntryRepository.findByWalletIdOrderByCreatedAtDesc(wallet.getId());
+  }
+
+  private Wallet findWalletOrThrow(UUID driverId) {
+    return walletRepository
+        .findByDriverId(driverId)
+        .orElseThrow(
+            () -> BaseDomainException.notFound("WALLET_NOT_FOUND", "Driver wallet not found"));
   }
 }

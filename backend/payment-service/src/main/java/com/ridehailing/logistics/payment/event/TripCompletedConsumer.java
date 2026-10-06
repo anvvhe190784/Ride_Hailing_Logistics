@@ -22,16 +22,17 @@ public class TripCompletedConsumer {
   public void onTripCompleted(Object rawMessage) {
     log.info("Received Kafka message on topic trip.completed: {}", rawMessage);
     try {
-      TripCompletedEvent event;
-      if (rawMessage instanceof EventEnvelope<?> envelope) {
-        event = objectMapper.convertValue(envelope.getPayload(), TripCompletedEvent.class);
-      } else if (rawMessage instanceof Map<?, ?> map) {
-        Object payload = map.get("payload");
-        event =
-            objectMapper.convertValue(payload != null ? payload : map, TripCompletedEvent.class);
-      } else {
-        event = objectMapper.convertValue(rawMessage, TripCompletedEvent.class);
-      }
+      TripCompletedEvent event =
+          switch (rawMessage) {
+            case EventEnvelope<?> envelope ->
+                objectMapper.convertValue(envelope.getPayload(), TripCompletedEvent.class);
+            case Map<?, ?> map -> {
+              Object payload = map.get("payload");
+              yield objectMapper.convertValue(
+                  payload != null ? payload : map, TripCompletedEvent.class);
+            }
+            case null, default -> objectMapper.convertValue(rawMessage, TripCompletedEvent.class);
+          };
 
       String idempotencyKey = "PAY-TRIP-" + event.getTripId();
       paymentService.processTripPayment(

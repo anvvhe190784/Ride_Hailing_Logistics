@@ -9,7 +9,7 @@ import jakarta.validation.constraints.Size;
 public record RegisterRequest(
     @NotBlank(message = "Phone number is required")
         @Pattern(
-            regexp = "^(0|\\+84)[0-9]{9,10}$",
+            regexp = "^(0|\\+84)\\d{9,10}$",
             message = "Invalid Vietnamese phone number format")
         String phone,
     String email,

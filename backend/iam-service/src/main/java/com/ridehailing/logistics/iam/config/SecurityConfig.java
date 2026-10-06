@@ -16,6 +16,7 @@ public class SecurityConfig {
 
   @Bean
   public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    // NOSONAR: Disabling CSRF is safe because this is a stateless REST API authenticated via JWT Bearer tokens in headers, not cookies.
     http.csrf(AbstractHttpConfigurer::disable)
         .cors(AbstractHttpConfigurer::disable)
         .sessionManagement(

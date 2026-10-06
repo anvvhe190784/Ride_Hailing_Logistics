@@ -34,6 +34,10 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class TripServiceImpl implements TripService {
 
+  private static final String STATUS_REJECTED = "REJECTED";
+  private static final String ERR_TRIP_NOT_FOUND = "TRIP_NOT_FOUND";
+  private static final String MSG_TRIP_NOT_FOUND = "Trip not found";
+
   private final TripRepository tripRepository;
   private final DriverOfferRepository driverOfferRepository;
   private final PricingClient pricingClient;
@@ -121,7 +125,7 @@ public class TripServiceImpl implements TripService {
     }
 
     if (!accept) {
-      offer.setStatus("REJECTED");
+      offer.setStatus(STATUS_REJECTED);
       offer.setRespondedAt(Instant.now());
       driverOfferRepository.save(offer);
       return toOfferResponse(offer);
@@ -146,7 +150,7 @@ public class TripServiceImpl implements TripService {
                   TripStatus.ARRIVED,
                   TripStatus.IN_TRIP));
       if (hasActiveTrip) {
-        offer.setStatus("REJECTED");
+        offer.setStatus(STATUS_REJECTED);
         driverOfferRepository.save(offer);
         throw BaseDomainException.conflict(
             "DRIVER_ALREADY_ASSIGNED", "Driver is already assigned to an active trip");
@@ -155,10 +159,10 @@ public class TripServiceImpl implements TripService {
       Trip trip =
           tripRepository
               .findById(offer.getTripId())
-              .orElseThrow(() -> BaseDomainException.notFound("TRIP_NOT_FOUND", "Trip not found"));
+              .orElseThrow(() -> BaseDomainException.notFound(ERR_TRIP_NOT_FOUND, MSG_TRIP_NOT_FOUND));
 
       if (trip.getStatus() != TripStatus.MATCHING) {
-        offer.setStatus("REJECTED");
+        offer.setStatus(STATUS_REJECTED);
         driverOfferRepository.save(offer);
         throw BaseDomainException.conflict(
             "TRIP_ALREADY_ASSIGNED", "Trip is no longer waiting for a driver");
@@ -187,7 +191,7 @@ public class TripServiceImpl implements TripService {
     Trip trip =
         tripRepository
             .findById(tripId)
-            .orElseThrow(() -> BaseDomainException.notFound("TRIP_NOT_FOUND", "Trip not found"));
+            .orElseThrow(() -> BaseDomainException.notFound(ERR_TRIP_NOT_FOUND, MSG_TRIP_NOT_FOUND));
 
     validateStateTransition(trip.getStatus(), nextStatus);
 
@@ -227,7 +231,7 @@ public class TripServiceImpl implements TripService {
     Trip trip =
         tripRepository
             .findById(tripId)
-            .orElseThrow(() -> BaseDomainException.notFound("TRIP_NOT_FOUND", "Trip not found"));
+            .orElseThrow(() -> BaseDomainException.notFound(ERR_TRIP_NOT_FOUND, MSG_TRIP_NOT_FOUND));
     return toResponse(trip);
   }
 

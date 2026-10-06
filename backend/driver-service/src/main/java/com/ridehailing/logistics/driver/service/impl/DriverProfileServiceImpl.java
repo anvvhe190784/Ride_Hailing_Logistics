@@ -26,6 +26,9 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class DriverProfileServiceImpl implements DriverProfileService {
 
+  private static final String ERR_DRIVER_NOT_FOUND = "DRIVER_NOT_FOUND";
+  private static final String MSG_DRIVER_NOT_FOUND = "Driver profile not found";
+
   private final DriverProfileRepository driverProfileRepository;
   private final VehicleRepository vehicleRepository;
   private final DriverMapper driverMapper;
@@ -55,7 +58,7 @@ public class DriverProfileServiceImpl implements DriverProfileService {
         driverProfileRepository
             .findById(driverId)
             .orElseThrow(
-                () -> BaseDomainException.notFound("DRIVER_NOT_FOUND", "Driver profile not found"));
+                () -> BaseDomainException.notFound(ERR_DRIVER_NOT_FOUND, MSG_DRIVER_NOT_FOUND));
 
     profile.setReviewStatus(DriverReviewStatus.APPROVED);
     profile.setReviewerId(reviewerId);
@@ -74,7 +77,7 @@ public class DriverProfileServiceImpl implements DriverProfileService {
         driverProfileRepository
             .findById(driverId)
             .orElseThrow(
-                () -> BaseDomainException.notFound("DRIVER_NOT_FOUND", "Driver profile not found"));
+                () -> BaseDomainException.notFound(ERR_DRIVER_NOT_FOUND, MSG_DRIVER_NOT_FOUND));
 
     // BR-001: Only APPROVED driver with active vehicle can become AVAILABLE
     if (status == DriverAvailabilityStatus.AVAILABLE) {
@@ -102,7 +105,7 @@ public class DriverProfileServiceImpl implements DriverProfileService {
         driverProfileRepository
             .findById(driverId)
             .orElseThrow(
-                () -> BaseDomainException.notFound("DRIVER_NOT_FOUND", "Driver profile not found"));
+                () -> BaseDomainException.notFound(ERR_DRIVER_NOT_FOUND, MSG_DRIVER_NOT_FOUND));
     return driverMapper.toResponse(profile);
   }
 

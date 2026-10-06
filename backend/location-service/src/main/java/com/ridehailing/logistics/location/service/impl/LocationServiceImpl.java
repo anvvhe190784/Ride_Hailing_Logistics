@@ -48,18 +48,18 @@ public class LocationServiceImpl implements LocationService {
         geometryFactory.createPoint(
             new Coordinate(request.longitude().doubleValue(), request.latitude().doubleValue()));
 
-    DriverLatestLocation record =
+    DriverLatestLocation latestLocation =
         existingOpt.orElse(DriverLatestLocation.builder().driverId(driverId).build());
-    record.setLocation(point);
-    record.setLatitude(request.latitude());
-    record.setLongitude(request.longitude());
-    record.setAccuracyMeters(request.accuracyMeters());
-    record.setHeadingDegrees(request.headingDegrees());
-    record.setSpeedMps(request.speedMps());
-    record.setSequenceNum(request.sequenceNum());
-    record.setDeviceTimestamp(request.deviceTimestamp());
+    latestLocation.setLocation(point);
+    latestLocation.setLatitude(request.latitude());
+    latestLocation.setLongitude(request.longitude());
+    latestLocation.setAccuracyMeters(request.accuracyMeters());
+    latestLocation.setHeadingDegrees(request.headingDegrees());
+    latestLocation.setSpeedMps(request.speedMps());
+    latestLocation.setSequenceNum(request.sequenceNum());
+    latestLocation.setDeviceTimestamp(request.deviceTimestamp());
 
-    locationRepository.save(record);
+    locationRepository.save(latestLocation);
 
     // Session 11: Write to Redis cache with TTL 60 seconds (DR-GEO-003)
     String redisKey = REDIS_LOCATION_KEY_PREFIX + driverId;
