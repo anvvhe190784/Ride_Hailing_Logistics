@@ -4,13 +4,14 @@ server:
 spring:
   application:
     name: config-service
-  profiles:
-    active: native
   cloud:
     config:
       server:
-        native:
-          search-locations: classpath:/config-repo/
+        git:
+          uri: https://github.com/anvvhe190784/Ride_Hailing_Config_Repo.git
+          default-label: main
+          clone-on-start: true
+          timeout: 10
   threads:
     virtual:
       enabled: true

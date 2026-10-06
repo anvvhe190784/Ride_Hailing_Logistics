@@ -2,26 +2,26 @@ version: '3.8'
 
 services:
   # ============================================================================
-  # POSTGRESQL (PostGIS)
+  # POSTGRESQL (PostGIS) - Multi-Database Architecture (Database per Service)
   # ============================================================================
   postgres:
     image: postgis/postgis:16-3.4
     container_name: ride_hailing_postgres
     environment:
-      POSTGRES_DB: ride_hailing_db
+      POSTGRES_DB: postgres
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: admin
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ../database/init_db.sql:/docker-entrypoint-initdb.d/00_init_db.sql
-      - ../database/migrations:/docker-entrypoint-initdb.d/migrations
+      - ../database/00_init_multiple_databases.sh:/docker-entrypoint-initdb.d/00_init_multiple_databases.sh
+      - ../database:/docker-entrypoint-initdb.d/init-scripts
     networks:
       - ride_hailing_net
 
   # ============================================================================
-  # REDIS (Cache & Distributed Lock - Session 11)
+  # REDIS (Cache & Distributed Lock)
   # ============================================================================
   redis:
     image: redis:7.2-alpine
@@ -35,7 +35,7 @@ services:
       - ride_hailing_net
 
   # ============================================================================
-  # APACHE KAFKA (KRaft mode - Session 10)
+  # APACHE KAFKA (KRaft mode)
   # ============================================================================
   kafka:
     image: confluentinc/cp-kafka:7.6.1

@@ -1,56 +1,33 @@
-# Real-Time Ride Hailing & Logistics Database Architecture
+# Tài Liệu Cơ Sở Dữ Liệu: Mô Hình Database Per Service
 
-## 1. Overview
+## 1. Tổng Quan Kiến Trúc
+Hệ thống Ride-Hailing & Logistics áp dụng mẫu hình kiến trúc chuẩn công nghiệp **Database per Service Pattern**. Thay vì sử dụng chung một cơ sở dữ liệu lớn, mỗi microservice sở hữu một cơ sở dữ liệu PostgreSQL độc lập:
 
-This database schema is designed according to the software requirements specification (SRS-RHL-002 v1.0, IEEE 830-1998
-standard) for the **Real-Time On-Demand Ride-Hailing & Logistics System**.
+| # | Microservice | Port | Database Name | Chức năng dữ liệu chính |
+|---|---|---|---|---|
+| 1 | `iam-service` | 8081 | `iam_db` | Users, Roles, User_Roles, Refresh_Tokens, Audit_Logs |
+| 2 | `driver-service` | 8082 | `driver_db` | Driver_Profiles, Vehicles, Driver_Documents, Driver_Audit_Logs |
+| 3 | `location-service` | 8083 | `location_db` | Driver_Locations, Driver_Telemetry_History (PostGIS Geometry GiST Index) |
+| 4 | `pricing-service` | 8084 | `pricing_db` | Pricing_Rules, Fare_Quotes (Hệ thống tính giá động Surge Pricing) |
+| 5 | `trip-service` | 8085 | `trip_db` | Trips, Trip_Stops, Driver_Offers, Trip_Status_History, Outbox_Events |
+| 6 | `payment-service` | 8086 | `payment_db` | Wallets, Wallet_Entries (Immutable Ledger), Payments, Refunds, Idempotency_Keys |
 
-- **RDBMS Engine**: PostgreSQL 18.3+ with PostGIS 3.6+ and UUID-OSSP
-- **Database Name**: `ride_hailing_db`
-- **Default Connection**: `postgresql://postgres:admin@127.0.0.1:5432/ride_hailing_db`
+---
 
-## 2. Domain Schema Separation (CON-01, DR-001)
+## 2. Các Tệp DDL Khởi Tạo
+- `00_init_multiple_databases.sh`: Script chạy tự động trong container Docker PostgreSQL khi khởi động lần đầu để tạo 6 databases.
+- `01_iam_db.sql`: Cấu trúc bảng và seed data quản trị cho `iam_db`.
+- `02_driver_db.sql`: Cấu trúc hồ sơ tài xế và phương tiện cho `driver_db`.
+- `03_location_db.sql`: Tích hợp extension PostGIS và chỉ mục GiST cho `location_db`.
+- `04_pricing_db.sql`: Bảng giá cơ sở và báo giá cho `pricing_db`.
+- `05_trip_db.sql`: Vòng đời chuyến xe, Partial Unique Index (chống race condition gán trùng tài xế) và Transactional Outbox cho `trip_db`.
+- `06_payment_db.sql`: Sổ cái tài chính bất biến (Append-only Ledger) và Idempotency cho `payment_db`.
 
-The database is structured into 7 distinct domain schemas to enforce Clean Architecture and Bounded Context boundaries:
+---
 
-| Schema     | Domain / Context             | Tables Included                                               | Key Purpose                                                       |
-|------------|------------------------------|---------------------------------------------------------------|-------------------------------------------------------------------|
-| `iam`      | Identity & Access Management | `users`                                                       | User credentials, roles (RBAC), and status                        |
-| `driver`   | Driver & Fleet               | `driver_profiles`, `vehicles`, `driver_documents`             | Driver KYC, availability status, and vehicle records              |
-| `location` | Telemetry & Spatial          | `driver_latest_locations`, `driver_telemetry_history`         | Real-time GPS coordinates with PostGIS GiST spatial indexing      |
-| `pricing`  | Pricing & Surge Engine       | `pricing_rules`, `fare_quotes`                                | Configurable base/distance/time pricing and fare quotes           |
-| `trip`     | Trip & Dispatch              | `trips`, `trip_stops`, `driver_offers`, `trip_status_history` | State machine, atomic matching, and driver exclusivity            |
-| `billing`  | Payment & Wallet             | `payments`, `wallets`, `wallet_entries`, `refunds`            | Immutable financial ledger, commission, and payment attempts      |
-| `platform` | Cross-Cutting & Reliability  | `outbox_events`, `audit_records`, `idempotency_records`       | Transactional outbox, immutable audit trails, and API idempotency |
-
-## 3. Key Architectural Highlights
-
-- **Spatial Indexing (`location.driver_latest_locations`)**: Utilizes PostGIS GiST indexing on `GEOMETRY(Point, 4326)`
-  for sub-20ms spatial queries (`ST_DWithin`, `ST_Distance`).
-- **Atomic Concurrency Guarantee (BR-002, CON-06)**: Uses a partial unique index on
-  `trip.trips (driver_id) WHERE status IN ('ACCEPTED', 'PICKING_UP', 'ARRIVED', 'IN_TRIP')` preventing race conditions
-  and double trip assignments.
-- **Immutable Financial Ledger (FR-WAL-002, BR-011)**: Driver earnings, platform commissions, and adjustments are
-  strictly recorded as immutable entries in `billing.wallet_entries`.
-- **Transactional Outbox (`platform.outbox_events`)**: Guarantees at-least-once cross-service domain event delivery
-  without distributed transactions.
-- **Idempotency Guard (`platform.idempotency_records`)**: Enforces idempotency keys on all mutating endpoints.
-
-## 4. Automation & Migration
-
-Run the automated PowerShell runner:
-
+## 3. Khởi Tạo Thủ Công Trên PostgreSQL Cục Bộ
+Chạy script PowerShell:
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\setup_database.ps1
+.\database\setup_database.ps1
 ```
-
-Or execute manual migration scripts in sequence:
-
-1. `init_db.sql`
-2. `migrations/01_extensions_and_schemas.sql`
-3. `migrations/02_iam_and_driver.sql`
-4. `migrations/03_location_and_pricing.sql`
-5. `migrations/04_trip_and_dispatch.sql`
-6. `migrations/05_billing_and_wallet.sql`
-7. `migrations/06_platform_outbox.sql`
-8. `tests/verify_db.sql`
+Script sẽ tự động kết nối tới `127.0.0.1:5432` (`postgres/admin`), tạo lần lượt 6 databases và nạp toàn bộ cấu trúc bảng và seed data.

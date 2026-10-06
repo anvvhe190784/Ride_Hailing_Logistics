@@ -4,11 +4,13 @@ server:
 spring:
   application:
     name: payment-service
+  config:
+    import: "optional:configserver:http://localhost:8888"
   threads:
     virtual:
       enabled: true
   datasource:
-    url: jdbc:postgresql://localhost:5432/ride_hailing_db?currentSchema=billing
+    url: jdbc:postgresql://localhost:5432/payment_db?currentSchema=billing
     username: postgres
     password: admin
     driver-class-name: org.postgresql.Driver

@@ -71,8 +71,17 @@ flowchart TB
         Payment["💳 payment-service (8086)\nPayments, Immutable Wallet Ledger"]
     end
 
-    subgraph DataPlane["🗄️ DATA & MESSAGING INFRASTRUCTURE"]
-        Postgres[("🐘 PostgreSQL 18.3 + PostGIS 3.6\nSchemas: iam, driver, location,\npricing, trip, billing, platform")]
+    subgraph GitConfig["🐙 CENTRALIZED CONFIG REPOSITORY (GIT)"]
+        GitRepo["🐙 GitHub: Ride_Hailing_Config_Repo\n- application.yml (global)\n- api-gateway.yml, iam-service.yml\n- driver-service.yml, location-service.yml\n- pricing-service.yml, trip-service.yml\n- payment-service.yml"]
+    end
+
+    subgraph DataPlane["🗄️ DATABASE PER SERVICE (ISOLATED POSTGRESQL DATABASES)"]
+        IAM_DB[("🗄️ iam_db\nUsers, Roles, Tokens, Audits")]
+        DRIVER_DB[("🗄️ driver_db\nProfiles, Vehicles, Docs, Audits")]
+        LOCATION_DB[("🗄️ location_db (PostGIS)\nLocations, Telemetry (GiST)")]
+        PRICING_DB[("🗄️ pricing_db\nPricing Rules, Fare Quotes")]
+        TRIP_DB[("🗄️ trip_db\nTrips, Stops, Offers, Outbox")]
+        PAYMENT_DB[("🗄️ payment_db\nWallets, Entries, Payments, Idempotency")]
         Redis[("⚡ Redis 7.x\n- Redis GEO (driver:locations:geo)\n- Distributed Locks (lock:driver/trip)\n- Telemetry Cache (driver:location:id)")]
         Kafka[("📨 Apache Kafka Cluster\nTopics: trip.completed,\ntrip.status.changed, driver.offer.created")]
     end
@@ -80,6 +89,8 @@ flowchart TB
     CustomerApp --> Gateway
     DriverApp --> Gateway
     AdminPortal --> Gateway
+
+    Config -->|Clone & Dynamic Refresh| GitRepo
 
     Gateway -.->|Register / Discover| Eureka
     Services -.->|Register / Discover| Eureka
@@ -96,12 +107,12 @@ flowchart TB
     Trip <--> Redis
     Pricing -.-> Redis
 
-    IAM --> Postgres
-    Driver --> Postgres
-    Location --> Postgres
-    Pricing --> Postgres
-    Trip --> Postgres
-    Payment --> Postgres
+    IAM --> IAM_DB
+    Driver --> DRIVER_DB
+    Location --> LOCATION_DB
+    Pricing --> PRICING_DB
+    Trip --> TRIP_DB
+    Payment --> PAYMENT_DB
 
     Trip -->|Produce trip.completed| Kafka
     Kafka -->|Consume trip.completed| Payment
@@ -110,9 +121,9 @@ flowchart TB
 
 ---
 
-## 3. MÔ HÌNH CƠ SỞ DỮ LIỆU POSTGRESQL & POSTGIS (ERD)
+## 3. MÔ HÌNH CƠ SỞ DỮ LIỆU POSTGRESQL & POSTGIS (DATABASE PER SERVICE - ERD)
 
-Cơ sở dữ liệu gồm **7 Schemas** và **19 Bảng chuẩn hóa 3NF**, bảo đảm tính cô lập dữ liệu tuyệt đối giữa các miền nghiệp vụ.
+Hệ thống áp dụng chuẩn mực **Database per Service Pattern**: 6 Cơ sở dữ liệu PostgreSQL độc lập tương ứng với 6 Domain Bounded Contexts, bảo đảm tính cô lập dữ liệu tuyệt đối giữa các miền nghiệp vụ.
 
 ```mermaid
 erDiagram
