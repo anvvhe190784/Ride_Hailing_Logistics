@@ -35,7 +35,7 @@ public class PaymentServiceImpl implements PaymentService {
 
   @Override
   @Transactional
-  public Payment processTripPayment(
+  public void processTripPayment(
       UUID tripId,
       UUID customerId,
       UUID driverId,
@@ -47,7 +47,7 @@ public class PaymentServiceImpl implements PaymentService {
     if (existingOpt.isPresent()) {
       log.info(
           "Idempotent payment detected for key {}. Returning existing record.", idempotencyKey);
-      return existingOpt.get();
+      return;
     }
 
     Payment payment =
@@ -109,8 +109,6 @@ public class PaymentServiceImpl implements PaymentService {
           netEarning,
           newBalance);
     }
-
-    return payment;
   }
 
   @Override

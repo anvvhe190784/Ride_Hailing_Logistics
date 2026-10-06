@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.UUID;
 
 public interface PaymentService {
-  Payment processTripPayment(
+  void processTripPayment(
       UUID tripId,
       UUID customerId,
       UUID driverId,

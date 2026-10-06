@@ -5,10 +5,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 import com.ridehailing.logistics.common.domain.enums.ServiceType;
+import com.ridehailing.logistics.common.dto.FareQuoteResponse;
 import com.ridehailing.logistics.pricing.domain.entity.FareQuote;
 import com.ridehailing.logistics.pricing.domain.entity.PricingRule;
 import com.ridehailing.logistics.pricing.dto.FareEstimateRequest;
-import com.ridehailing.logistics.common.dto.FareQuoteResponse;
 import com.ridehailing.logistics.pricing.repository.FareQuoteRepository;
 import com.ridehailing.logistics.pricing.repository.PricingRuleRepository;
 import com.ridehailing.logistics.pricing.service.impl.PricingServiceImpl;

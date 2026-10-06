@@ -2,12 +2,12 @@ package com.ridehailing.logistics.driver.service.impl;
 
 import com.ridehailing.logistics.common.domain.enums.DriverAvailabilityStatus;
 import com.ridehailing.logistics.common.domain.enums.DriverReviewStatus;
+import com.ridehailing.logistics.common.dto.DriverProfileResponse;
 import com.ridehailing.logistics.common.exception.BaseDomainException;
 import com.ridehailing.logistics.driver.domain.entity.DriverProfile;
 import com.ridehailing.logistics.driver.domain.entity.Vehicle;
 import com.ridehailing.logistics.driver.dto.request.DriverKycRequest;
 import com.ridehailing.logistics.driver.dto.request.VehicleCreateRequest;
-import com.ridehailing.logistics.common.dto.DriverProfileResponse;
 import com.ridehailing.logistics.driver.dto.response.VehicleResponse;
 import com.ridehailing.logistics.driver.mapper.DriverMapper;
 import com.ridehailing.logistics.driver.repository.DriverProfileRepository;

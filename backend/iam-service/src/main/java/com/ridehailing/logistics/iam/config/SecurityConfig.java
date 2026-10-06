@@ -15,8 +15,10 @@ import org.springframework.security.web.SecurityFilterChain;
 public class SecurityConfig {
 
   @Bean
+  @SuppressWarnings("java:S4502") // Disabling CSRF is safe for stateless REST APIs using JWT Bearer headers
   public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-    // NOSONAR: Disabling CSRF is safe because this is a stateless REST API authenticated via JWT Bearer tokens in headers, not cookies.
+    // NOSONAR: Disabling CSRF is safe because this is a stateless REST API authenticated via JWT
+    // Bearer tokens in headers, not cookies.
     http.csrf(AbstractHttpConfigurer::disable)
         .cors(AbstractHttpConfigurer::disable)
         .sessionManagement(

@@ -1,11 +1,14 @@
 # PowerShell Script to setup 6 independent databases on PostgreSQL local
 # Database per Service Pattern: iam_db, driver_db, location_db, pricing_db, trip_db, payment_db
 
-$env:PGPASSWORD = 'admin'
+param (
+    [string]$DbPassword = $(if ($env:PGPASSWORD) { $env:PGPASSWORD } else { "admin" })
+)
+$env:PGPASSWORD = $DbPassword
 $PSQL = "C:\Program Files\PostgreSQL\18\bin\psql.exe"
 $HOST_NAME = "127.0.0.1"
 $PORT = "5432"
-$USER = "postgres"
+$USER = $(if ($env:PGUSER) { $env:PGUSER } else { "postgres" })
 
 Write-Host "==========================================================" -ForegroundColor Cyan
 Write-Host "INITIALIZING 6 MICROSERVICE DATABASES (PostgreSQL 18)" -ForegroundColor Cyan

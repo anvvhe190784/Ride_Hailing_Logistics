@@ -1,9 +1,9 @@
 package com.ridehailing.logistics.driver.service;
 
 import com.ridehailing.logistics.common.domain.enums.DriverAvailabilityStatus;
+import com.ridehailing.logistics.common.dto.DriverProfileResponse;
 import com.ridehailing.logistics.driver.dto.request.DriverKycRequest;
 import com.ridehailing.logistics.driver.dto.request.VehicleCreateRequest;
-import com.ridehailing.logistics.common.dto.DriverProfileResponse;
 import com.ridehailing.logistics.driver.dto.response.VehicleResponse;
 import java.util.List;
 import java.util.UUID;

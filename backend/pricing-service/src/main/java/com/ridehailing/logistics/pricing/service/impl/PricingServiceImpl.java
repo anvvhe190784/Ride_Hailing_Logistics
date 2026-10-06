@@ -1,10 +1,10 @@
 package com.ridehailing.logistics.pricing.service.impl;
 
+import com.ridehailing.logistics.common.dto.FareQuoteResponse;
 import com.ridehailing.logistics.common.exception.BaseDomainException;
 import com.ridehailing.logistics.pricing.domain.entity.FareQuote;
 import com.ridehailing.logistics.pricing.domain.entity.PricingRule;
 import com.ridehailing.logistics.pricing.dto.FareEstimateRequest;
-import com.ridehailing.logistics.common.dto.FareQuoteResponse;
 import com.ridehailing.logistics.pricing.repository.FareQuoteRepository;
 import com.ridehailing.logistics.pricing.repository.PricingRuleRepository;
 import com.ridehailing.logistics.pricing.service.PricingService;

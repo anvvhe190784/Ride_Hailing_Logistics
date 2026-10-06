@@ -13,13 +13,16 @@ from requirement_annotations_data import ANNOTATIONS_DB
 SRC_DOCX = r"C:\Users\vanan\.gemini\antigravity\brain\0933d14e-bd9f-424f-a8e9-adb4fcce4a4b\.user_uploaded\media_1791265125716.docx"
 DST_DOCX = r"d:\Rikkei\Rikkei FE\Ride_Hailing_Logistics\docs\SRS_RHL_002_Annotated_Implementation.docx"
 
+W_VAL = 'w:val'
+W_COLOR = 'w:color'
+
 def set_cell_background(cell, fill_hex):
-    tcPr = cell._tc.get_or_add_tcPr()
+    tc_pr = cell._tc.get_or_add_tcPr()
     shd = OxmlElement('w:shd')
-    shd.set(qn('w:val'), 'clear')
-    shd.set(qn('w:color'), 'auto')
+    shd.set(qn(W_VAL), 'clear')
+    shd.set(qn(W_COLOR), 'auto')
     shd.set(qn('w:fill'), fill_hex)
-    tcPr.append(shd)
+    tc_pr.append(shd)
 
 def create_callout_box(doc, target_p, req_code, solution, code_loc, db_loc):
     table = doc.add_table(1, 1)
@@ -28,26 +31,26 @@ def create_callout_box(doc, target_p, req_code, solution, code_loc, db_loc):
     cell = table.cell(0, 0)
     set_cell_background(cell, 'F4F7FB')
     
-    tcPr = cell._tc.get_or_add_tcPr()
-    tcBorders = OxmlElement('w:tcBorders')
+    tc_pr = cell._tc.get_or_add_tcPr()
+    tc_borders = OxmlElement('w:tcBorders')
     
     # Left border: thick navy/blue (3pt)
     left = OxmlElement('w:left')
-    left.set(qn('w:val'), 'single')
+    left.set(qn(W_VAL), 'single')
     left.set(qn('w:sz'), '24')
     left.set(qn('w:space'), '0')
-    left.set(qn('w:color'), '0F4C81')
-    tcBorders.append(left)
+    left.set(qn(W_COLOR), '0F4C81')
+    tc_borders.append(left)
     
     # Top/Right/Bottom: subtle border (0.5pt)
     for side in ('top', 'bottom', 'right'):
         b = OxmlElement(f'w:{side}')
-        b.set(qn('w:val'), 'single')
+        b.set(qn(W_VAL), 'single')
         b.set(qn('w:sz'), '4')
         b.set(qn('w:space'), '0')
-        b.set(qn('w:color'), 'D1DCE5')
-        tcBorders.append(b)
-    tcPr.append(tcBorders)
+        b.set(qn(W_COLOR), 'D1DCE5')
+        tc_borders.append(b)
+    tc_pr.append(tc_borders)
     
     # Title paragraph
     p = cell.paragraphs[0]

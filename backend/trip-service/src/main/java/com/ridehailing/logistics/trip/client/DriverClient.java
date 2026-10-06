@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
-@FeignClient(name = "driver-service", fallback = DriverClientFallback.class)
+@FeignClient(name = "driver-service", contextId = "driverClient", fallback = DriverClientFallback.class)
 public interface DriverClient {
 
   @GetMapping("/api/v1/drivers/{driverId}")

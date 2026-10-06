@@ -16,6 +16,7 @@ import org.hibernate.annotations.CreationTimestamp;
 @Builder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
+@SuppressWarnings("JpaDataSourceORMInspection")
 public class DriverOffer {
 
   @Id

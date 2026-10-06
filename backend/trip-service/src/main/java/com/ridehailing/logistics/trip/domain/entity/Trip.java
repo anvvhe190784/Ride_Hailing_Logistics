@@ -20,6 +20,7 @@ import org.hibernate.type.SqlTypes;
 @Builder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
+@SuppressWarnings("JpaDataSourceORMInspection")
 public class Trip {
 
   @Id

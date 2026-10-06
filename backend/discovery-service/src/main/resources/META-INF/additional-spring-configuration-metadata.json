@@ -1,0 +1,14 @@
+{
+  "properties": [
+    {
+      "name": "eureka.server.enable-self-preservation",
+      "type": "java.lang.Boolean",
+      "description": "Whether to enable Eureka server self-preservation mode."
+    },
+    {
+      "name": "eureka.server.eviction-interval-timer-in-ms",
+      "type": "java.lang.Long",
+      "description": "Interval timer in milliseconds for evicting expired instances."
+    }
+  ]
+}

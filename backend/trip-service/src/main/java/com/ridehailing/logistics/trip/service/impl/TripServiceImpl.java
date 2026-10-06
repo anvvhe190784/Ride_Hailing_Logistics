@@ -6,7 +6,6 @@ import com.ridehailing.logistics.common.dto.ApiResponse;
 import com.ridehailing.logistics.common.dto.FareQuoteResponse;
 import com.ridehailing.logistics.common.event.TripCompletedEvent;
 import com.ridehailing.logistics.common.exception.BaseDomainException;
-import com.ridehailing.logistics.trip.client.DriverClient;
 import com.ridehailing.logistics.trip.client.PricingClient;
 import com.ridehailing.logistics.trip.domain.entity.DriverOffer;
 import com.ridehailing.logistics.trip.domain.entity.Trip;
@@ -41,7 +40,6 @@ public class TripServiceImpl implements TripService {
   private final TripRepository tripRepository;
   private final DriverOfferRepository driverOfferRepository;
   private final PricingClient pricingClient;
-  private final DriverClient driverClient;
   private final RedisDistributedLockService lockService;
   private final TripEventProducer eventProducer;
   private final ObjectMapper objectMapper;
@@ -159,7 +157,8 @@ public class TripServiceImpl implements TripService {
       Trip trip =
           tripRepository
               .findById(offer.getTripId())
-              .orElseThrow(() -> BaseDomainException.notFound(ERR_TRIP_NOT_FOUND, MSG_TRIP_NOT_FOUND));
+              .orElseThrow(
+                  () -> BaseDomainException.notFound(ERR_TRIP_NOT_FOUND, MSG_TRIP_NOT_FOUND));
 
       if (trip.getStatus() != TripStatus.MATCHING) {
         offer.setStatus(STATUS_REJECTED);
@@ -191,7 +190,8 @@ public class TripServiceImpl implements TripService {
     Trip trip =
         tripRepository
             .findById(tripId)
-            .orElseThrow(() -> BaseDomainException.notFound(ERR_TRIP_NOT_FOUND, MSG_TRIP_NOT_FOUND));
+            .orElseThrow(
+                () -> BaseDomainException.notFound(ERR_TRIP_NOT_FOUND, MSG_TRIP_NOT_FOUND));
 
     validateStateTransition(trip.getStatus(), nextStatus);
 
@@ -231,7 +231,8 @@ public class TripServiceImpl implements TripService {
     Trip trip =
         tripRepository
             .findById(tripId)
-            .orElseThrow(() -> BaseDomainException.notFound(ERR_TRIP_NOT_FOUND, MSG_TRIP_NOT_FOUND));
+            .orElseThrow(
+                () -> BaseDomainException.notFound(ERR_TRIP_NOT_FOUND, MSG_TRIP_NOT_FOUND));
     return toResponse(trip);
   }
 

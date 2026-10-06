@@ -1,9 +1,9 @@
 package com.ridehailing.logistics.pricing.controller;
 
 import com.ridehailing.logistics.common.dto.ApiResponse;
+import com.ridehailing.logistics.common.dto.FareQuoteResponse;
 import com.ridehailing.logistics.common.security.SecurityConstants;
 import com.ridehailing.logistics.pricing.dto.FareEstimateRequest;
-import com.ridehailing.logistics.common.dto.FareQuoteResponse;
 import com.ridehailing.logistics.pricing.service.PricingService;
 import jakarta.validation.Valid;
 import java.util.UUID;

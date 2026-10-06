@@ -5,6 +5,10 @@ Contains exact solution descriptions, code locations, and database/messaging ref
 for all 253 requirements.
 """
 
+TRIP_ACCEPT_OFFER_CODE = (
+    "backend/trip-service/.../service/impl/TripServiceImpl.java (acceptOffer); TripRepository.java"
+)
+
 ANNOTATIONS_DB = {
     # --- CONSTRAINTS (CON-01 to CON-08) ---
     "CON-01": {
@@ -34,7 +38,7 @@ ANNOTATIONS_DB = {
     },
     "CON-06": {
         "solution": "Đảm bảo tính nguyên tử tuyệt đối khi gán tài xế: Sử dụng Redis Distributed Lock (khóa tài xế trong 15s) kết hợp Partial Unique Index tại tầng Database PostgreSQL để ngăn chặn triệt để tình trạng Race Condition nhiều cuốc gán 1 tài xế.",
-        "code": "backend/trip-service/.../service/impl/TripServiceImpl.java (acceptOffer); TripRepository.java",
+        "code": TRIP_ACCEPT_OFFER_CODE,
         "db": "trip.trips (Partial Unique Index: idx_trips_driver_active_unique WHERE status IN ('ACCEPTED', 'ARRIVING', 'IN_PROGRESS'))"
     },
     "CON-07": {
@@ -56,7 +60,7 @@ ANNOTATIONS_DB = {
     },
     "BR-002": {
         "solution": "Ngăn chặn một tài xế nhận 2 cuốc xe đồng thời bằng kiểm tra logic truy vấn chuyến đang hoạt động và khóa chặn tầng DB bằng PostgreSQL Partial Unique Index.",
-        "code": "backend/trip-service/.../service/impl/TripServiceImpl.java (acceptOffer); TripRepository.java",
+        "code": TRIP_ACCEPT_OFFER_CODE,
         "db": "trip.trips (Partial Index: idx_trips_driver_active_unique: 1 tài xế chỉ có tối đa 1 chuyến ACCEPTED/ARRIVING/IN_PROGRESS)"
     },
     "BR-003": {
@@ -446,7 +450,7 @@ ANNOTATIONS_DB = {
     },
     "FR-TRIP-006": {
         "solution": "Tài xế chấp nhận cuốc xe (Accept Offer): Thực hiện nguyên tử bằng Redis Distributed Lock, gán driver_id vào chuyến và chuyển trạng thái chuyến sang ACCEPTED.",
-        "code": "backend/trip-service/.../service/impl/TripServiceImpl.java (acceptOffer); TripRepository.java",
+        "code": TRIP_ACCEPT_OFFER_CODE,
         "db": "trip.trips (driver_id, status = 'ACCEPTED', accepted_at = NOW()); trip.driver_offers (status = 'ACCEPTED')"
     },
     "FR-TRIP-007": {
