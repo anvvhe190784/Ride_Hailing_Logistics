@@ -13,7 +13,4 @@ dependencies {
     implementation 'org.postgresql:postgresql'
     implementation 'org.locationtech.jts:jts-core:1.19.0'
     implementation 'org.hibernate.orm:hibernate-spatial'
-    implementation 'org.mapstruct:mapstruct:1.6.3'
-    annotationProcessor 'org.mapstruct:mapstruct-processor:1.6.3'
-    annotationProcessor 'org.projectlombok:lombok-mapstruct-binding:0.2.0'
 }

@@ -38,4 +38,14 @@ public class PricingController {
     FareQuoteResponse response = pricingService.getQuote(quoteId);
     return ResponseEntity.ok(ApiResponse.success(response, correlationId));
   }
+
+  @PostMapping({"/quotes/{quoteId}/consume", "/quote/{quoteId}/consume"})
+  public ResponseEntity<ApiResponse<FareQuoteResponse>> consumeQuote(
+      @PathVariable UUID quoteId,
+      @RequestParam UUID customerId,
+      @RequestHeader(value = SecurityConstants.HEADER_CORRELATION_ID, required = false)
+          String correlationId) {
+    FareQuoteResponse response = pricingService.consumeQuote(quoteId, customerId);
+    return ResponseEntity.ok(ApiResponse.success(response, correlationId));
+  }
 }

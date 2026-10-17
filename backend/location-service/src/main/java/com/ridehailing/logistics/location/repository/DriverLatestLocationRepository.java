@@ -1,6 +1,7 @@
 package com.ridehailing.logistics.location.repository;
 
 import com.ridehailing.logistics.location.domain.entity.DriverLatestLocation;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -16,13 +17,12 @@ public interface DriverLatestLocationRepository extends JpaRepository<DriverLate
       value =
           """
         SELECT d.driver_id AS driverId,
-               d.latitude AS latitude,
-               d.longitude AS longitude,
-               ROUND(CAST(ST_Distance(d.location::geography, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography) AS numeric), 2) AS distanceMeters
+               CAST(d.latitude AS float8) AS latitude,
+               CAST(d.longitude AS float8) AS longitude,
+               CAST(ST_Distance(d.location::geography, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography) AS float8) AS distanceMeters
         FROM location.driver_latest_locations d
-        JOIN driver.driver_profiles p ON d.driver_id = p.driver_id
-        WHERE p.availability_status = 'AVAILABLE'
-          AND p.review_status = 'APPROVED'
+        WHERE d.is_available = TRUE
+          AND d.updated_at >= :cutoffTime
           AND ST_DWithin(d.location::geography, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography, :radiusMeters)
         ORDER BY distanceMeters ASC
         LIMIT :limit
@@ -32,15 +32,16 @@ public interface DriverLatestLocationRepository extends JpaRepository<DriverLate
       @Param("lat") double latitude,
       @Param("lng") double longitude,
       @Param("radiusMeters") double radiusMeters,
+      @Param("cutoffTime") Instant cutoffTime,
       @Param("limit") int limit);
 
   interface NearbyDriverProjection {
     UUID getDriverId();
 
-    double getLatitude();
+    Double getLatitude();
 
-    double getLongitude();
+    Double getLongitude();
 
-    double getDistanceMeters();
+    Double getDistanceMeters();
   }
 }

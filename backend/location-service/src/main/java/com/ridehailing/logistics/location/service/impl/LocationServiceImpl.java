@@ -58,8 +58,22 @@ public class LocationServiceImpl implements LocationService {
     latestLocation.setSpeedMps(request.speedMps());
     latestLocation.setSequenceNum(request.sequenceNum());
     latestLocation.setDeviceTimestamp(request.deviceTimestamp());
+    latestLocation.setAvailable(true);
 
     locationRepository.save(latestLocation);
+
+    // Redis GEO for radius searches
+    redisTemplate
+        .opsForGeo()
+        .add(
+            "geo:drivers:available",
+            new org.springframework.data.geo.Point(
+                request.longitude().doubleValue(), request.latitude().doubleValue()),
+            driverId.toString());
+
+    // Redis driver heartbeat key (TTL 60s)
+    String heartbeatKey = "driver:heartbeat:" + driverId;
+    redisTemplate.opsForValue().set(heartbeatKey, String.valueOf(System.currentTimeMillis()), Duration.ofSeconds(60));
 
     // Session 11: Write to Redis cache with TTL 60 seconds (DR-GEO-003)
     String redisKey = REDIS_LOCATION_KEY_PREFIX + driverId;
@@ -77,8 +91,9 @@ public class LocationServiceImpl implements LocationService {
   @Transactional(readOnly = true)
   public List<NearbyDriverResponse> findNearbyDrivers(
       double latitude, double longitude, double radiusMeters, int limit) {
+    java.time.Instant cutoffTime = java.time.Instant.now().minus(Duration.ofSeconds(120));
     return locationRepository
-        .findAvailableDriversNearby(latitude, longitude, radiusMeters, limit)
+        .findAvailableDriversNearby(latitude, longitude, radiusMeters, cutoffTime, limit)
         .stream()
         .map(
             p ->

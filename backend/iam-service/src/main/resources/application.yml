@@ -37,3 +37,9 @@ management:
     web:
       exposure:
         include: health,info
+
+app:
+  security:
+    jwt:
+      secret: ${JWT_SECRET:}
+

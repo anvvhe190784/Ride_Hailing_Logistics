@@ -96,6 +96,26 @@ public class Trip {
   @Column(name = "cancelled_at")
   private Instant cancelledAt;
 
+  @Column(name = "sender_name")
+  private String senderName;
+
+  @Column(name = "sender_phone")
+  private String senderPhone;
+
+  @Column(name = "recipient_name")
+  private String recipientName;
+
+  @Column(name = "recipient_phone")
+  private String recipientPhone;
+
+  @Column(name = "package_description")
+  private String packageDescription;
+
+  @Version
+  @Column(name = "version", nullable = false)
+  @Builder.Default
+  private Long version = 0L;
+
   @UpdateTimestamp
   @Column(name = "updated_at", nullable = false)
   private Instant updatedAt;

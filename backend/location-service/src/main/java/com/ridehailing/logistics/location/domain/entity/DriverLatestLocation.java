@@ -42,6 +42,14 @@ public class DriverLatestLocation {
   @Column(name = "speed_mps", precision = 6, scale = 2)
   private BigDecimal speedMps;
 
+  @Column(name = "is_suspicious_gps", nullable = false)
+  @Builder.Default
+  private boolean isSuspiciousGps = false;
+
+  @Column(name = "is_available", nullable = false)
+  @Builder.Default
+  private boolean isAvailable = true;
+
   @Column(name = "sequence_num", nullable = false)
   private Long sequenceNum;
 
@@ -49,8 +57,16 @@ public class DriverLatestLocation {
   private Instant deviceTimestamp;
 
   @UpdateTimestamp
-  @Column(name = "server_timestamp", nullable = false)
-  private Instant serverTimestamp;
+  @Column(name = "updated_at", nullable = false)
+  private Instant updatedAt;
+
+  public Instant getServerTimestamp() {
+    return updatedAt;
+  }
+
+  public void setServerTimestamp(Instant serverTimestamp) {
+    this.updatedAt = serverTimestamp;
+  }
 
   @Override
   public boolean equals(Object o) {

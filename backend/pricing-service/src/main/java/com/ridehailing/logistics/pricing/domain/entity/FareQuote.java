@@ -73,6 +73,10 @@ public class FareQuote {
   @Column(name = "expires_at", nullable = false)
   private Instant expiresAt;
 
+  @Column(name = "is_used", nullable = false)
+  @Builder.Default
+  private boolean isUsed = false;
+
   @CreationTimestamp
   @Column(name = "created_at", nullable = false, updatable = false)
   private Instant createdAt;

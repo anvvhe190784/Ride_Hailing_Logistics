@@ -25,6 +25,14 @@ public class BaseDomainException extends RuntimeException {
     return new BaseDomainException(errorCode, message, 409);
   }
 
+  public static BaseDomainException forbidden(String errorCode, String message) {
+    return new BaseDomainException(errorCode, message, 403);
+  }
+
+  public static BaseDomainException unauthorized(String errorCode, String message) {
+    return new BaseDomainException(errorCode, message, 401);
+  }
+
   public static BaseDomainException businessRuleViolation(String message) {
     return new BaseDomainException("BUSINESS_RULE_VIOLATION", message, 422);
   }

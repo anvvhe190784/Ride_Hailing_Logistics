@@ -1,5 +1,6 @@
 package com.ridehailing.logistics.driver.domain.entity;
 
+import com.ridehailing.logistics.common.domain.enums.VehicleStatus;
 import com.ridehailing.logistics.common.domain.enums.VehicleType;
 import jakarta.persistence.*;
 import java.time.Instant;
@@ -40,9 +41,10 @@ public class Vehicle {
   @Column(length = 30)
   private String color;
 
+  @Enumerated(EnumType.STRING)
   @Column(nullable = false, length = 32)
   @Builder.Default
-  private String status = "ACTIVE";
+  private VehicleStatus status = VehicleStatus.ACTIVE;
 
   @CreationTimestamp
   @Column(name = "created_at", nullable = false, updatable = false)

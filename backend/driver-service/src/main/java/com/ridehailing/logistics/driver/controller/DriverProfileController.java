@@ -1,8 +1,10 @@
 package com.ridehailing.logistics.driver.controller;
 
 import com.ridehailing.logistics.common.domain.enums.DriverAvailabilityStatus;
+import com.ridehailing.logistics.common.domain.enums.UserRole;
 import com.ridehailing.logistics.common.dto.ApiResponse;
 import com.ridehailing.logistics.common.dto.DriverProfileResponse;
+import com.ridehailing.logistics.common.exception.BaseDomainException;
 import com.ridehailing.logistics.common.security.SecurityConstants;
 import com.ridehailing.logistics.driver.dto.request.DriverKycRequest;
 import com.ridehailing.logistics.driver.dto.request.VehicleCreateRequest;
@@ -55,9 +57,25 @@ public class DriverProfileController {
   @GetMapping("/{driverId}")
   public ResponseEntity<ApiResponse<DriverProfileResponse>> getDriverById(
       @PathVariable UUID driverId,
+      @RequestHeader(value = SecurityConstants.HEADER_USER_ID, required = false) UUID callerId,
+      @RequestHeader(value = SecurityConstants.HEADER_USER_ROLE, required = false) String userRole,
       @RequestHeader(value = SecurityConstants.HEADER_CORRELATION_ID, required = false)
           String correlationId) {
     DriverProfileResponse response = driverProfileService.getProfile(driverId);
+    boolean isPrivileged =
+        (callerId != null && callerId.equals(driverId))
+            || UserRole.ADMIN.name().equals(userRole)
+            || UserRole.REVIEWER.name().equals(userRole);
+    if (!isPrivileged) {
+      response =
+          new DriverProfileResponse(
+              response.driverId(),
+              "***MASKED***",
+              "***MASKED***",
+              response.reviewStatus(),
+              null,
+              response.availabilityStatus());
+    }
     return ResponseEntity.ok(ApiResponse.success(response, correlationId));
   }
 
@@ -65,8 +83,14 @@ public class DriverProfileController {
   public ResponseEntity<ApiResponse<DriverProfileResponse>> approveDriver(
       @PathVariable UUID driverId,
       @RequestHeader(SecurityConstants.HEADER_USER_ID) UUID reviewerId,
+      @RequestHeader(value = SecurityConstants.HEADER_USER_ROLE, required = false) String userRole,
       @RequestHeader(value = SecurityConstants.HEADER_CORRELATION_ID, required = false)
           String correlationId) {
+    if (userRole == null
+        || (!UserRole.ADMIN.name().equals(userRole) && !UserRole.REVIEWER.name().equals(userRole))) {
+      throw BaseDomainException.forbidden(
+          "ACCESS_DENIED", "Only ADMIN or REVIEWER can approve driver profiles");
+    }
     DriverProfileResponse response = driverProfileService.approveDriver(driverId, reviewerId);
     return ResponseEntity.ok(ApiResponse.success(response, correlationId));
   }

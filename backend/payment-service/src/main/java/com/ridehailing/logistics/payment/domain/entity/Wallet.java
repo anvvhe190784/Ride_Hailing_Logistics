@@ -40,6 +40,11 @@ public class Wallet {
   @Column(name = "created_at", nullable = false, updatable = false)
   private Instant createdAt;
 
+  @Version
+  @Column(name = "version", nullable = false)
+  @Builder.Default
+  private Long version = 0L;
+
   @UpdateTimestamp
   @Column(name = "updated_at", nullable = false)
   private Instant updatedAt;

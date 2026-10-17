@@ -8,6 +8,9 @@ import com.ridehailing.logistics.payment.service.PaymentService;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -31,11 +34,12 @@ public class PaymentController {
   }
 
   @GetMapping("/wallets/statement")
-  public ResponseEntity<ApiResponse<List<WalletEntry>>> getMyWalletStatement(
+  public ResponseEntity<ApiResponse<Page<WalletEntry>>> getMyWalletStatement(
       @RequestHeader(SecurityConstants.HEADER_USER_ID) UUID driverId,
+      @PageableDefault(size = 20) Pageable pageable,
       @RequestHeader(value = SecurityConstants.HEADER_CORRELATION_ID, required = false)
           String correlationId) {
-    List<WalletEntry> entries = paymentService.getWalletStatement(driverId);
+    Page<WalletEntry> entries = paymentService.getWalletStatement(driverId, pageable);
     return ResponseEntity.ok(ApiResponse.success(entries, correlationId));
   }
 }

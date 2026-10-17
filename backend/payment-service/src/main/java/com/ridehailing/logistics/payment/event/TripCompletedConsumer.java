@@ -46,6 +46,7 @@ public class TripCompletedConsumer {
           "Successfully processed payment and ledger for completed Trip ID: {}", event.getTripId());
     } catch (Exception e) {
       log.error("Error processing trip.completed Kafka event: {}", e.getMessage(), e);
+      throw new RuntimeException("Failed to process trip.completed event: " + e.getMessage(), e);
     }
   }
 }

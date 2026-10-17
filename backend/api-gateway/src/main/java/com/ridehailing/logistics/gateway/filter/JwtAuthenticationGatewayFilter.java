@@ -2,9 +2,11 @@ package com.ridehailing.logistics.gateway.filter;
 
 import com.ridehailing.logistics.common.security.JwtTokenProvider;
 import com.ridehailing.logistics.common.security.SecurityConstants;
+import io.jsonwebtoken.Claims;
 import java.util.List;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
@@ -26,42 +28,69 @@ public class JwtAuthenticationGatewayFilter implements GlobalFilter, Ordered {
           "/api/v1/auth/refresh-token",
           "/actuator",
           "/eureka");
-  private final JwtTokenProvider jwtTokenProvider = new JwtTokenProvider();
+  private final JwtTokenProvider jwtTokenProvider;
+
+  public JwtAuthenticationGatewayFilter(
+      @Value("${app.security.jwt.secret:}") String jwtSecret) {
+    this.jwtTokenProvider = new JwtTokenProvider(jwtSecret);
+  }
 
   @Override
   public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
-    ServerHttpRequest request = exchange.getRequest();
-    String path = request.getURI().getPath();
+    // 1. Sanitize incoming request by stripping potential header spoofing attempts
+    ServerHttpRequest sanitizedRequest =
+        exchange
+            .getRequest()
+            .mutate()
+            .headers(
+                headers -> {
+                  headers.remove(SecurityConstants.HEADER_USER_ID);
+                  headers.remove(SecurityConstants.HEADER_USER_ROLE);
+                  headers.remove(SecurityConstants.HEADER_USER_PHONE);
+                })
+            .build();
+    ServerWebExchange sanitizedExchange = exchange.mutate().request(sanitizedRequest).build();
 
-    // 1. Skip authentication for public endpoints
+    String path = sanitizedRequest.getURI().getPath();
+
+    // 2. Skip authentication for public endpoints
     boolean isPublic = EXCLUDED_PATHS.stream().anyMatch(path::startsWith);
     if (isPublic) {
-      return chain.filter(exchange);
+      return chain.filter(sanitizedExchange);
     }
 
-    // 2. Validate Authorization header
-    String authHeader = request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
+    // 3. Validate Authorization header
+    String authHeader = sanitizedRequest.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
     if (authHeader == null || !authHeader.startsWith("Bearer ")) {
       log.warn("Missing or invalid Authorization header for path: {}", path);
-      exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
-      return exchange.getResponse().setComplete();
+      sanitizedExchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+      return sanitizedExchange.getResponse().setComplete();
     }
 
     String token = authHeader.substring(7);
-    if (!jwtTokenProvider.validateToken(token)) {
+    Claims claims;
+    try {
+      claims = jwtTokenProvider.parseClaims(token);
+    } catch (Exception e) {
       log.warn("Expired or invalid JWT token for path: {}", path);
-      exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
-      return exchange.getResponse().setComplete();
+      sanitizedExchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+      return sanitizedExchange.getResponse().setComplete();
     }
 
-    // 3. Extract claims and propagate to downstream microservices
-    try {
-      UUID userId = jwtTokenProvider.getUserIdFromToken(token);
-      String role = jwtTokenProvider.getRoleFromToken(token);
-      String phone = jwtTokenProvider.getPhoneFromToken(token);
+    if (!jwtTokenProvider.isAccessToken(claims)) {
+      log.warn("Non-access token presented for path: {}", path);
+      sanitizedExchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+      return sanitizedExchange.getResponse().setComplete();
+    }
 
-      ServerHttpRequest mutatedRequest =
-          request
+    // 4. Extract claims and propagate trusted headers to downstream microservices
+    try {
+      UUID userId = UUID.fromString(claims.getSubject());
+      String role = claims.get(SecurityConstants.CLAIM_ROLE, String.class);
+      String phone = claims.get(SecurityConstants.CLAIM_PHONE, String.class);
+
+      ServerHttpRequest authenticatedRequest =
+          sanitizedRequest
               .mutate()
               .header(SecurityConstants.HEADER_USER_ID, userId.toString())
               .header(SecurityConstants.HEADER_USER_ROLE, role)
@@ -69,11 +98,11 @@ public class JwtAuthenticationGatewayFilter implements GlobalFilter, Ordered {
               .header(SecurityConstants.HEADER_CORRELATION_ID, UUID.randomUUID().toString())
               .build();
 
-      return chain.filter(exchange.mutate().request(mutatedRequest).build());
+      return chain.filter(sanitizedExchange.mutate().request(authenticatedRequest).build());
     } catch (Exception e) {
       log.error("Error processing JWT claims: {}", e.getMessage());
-      exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
-      return exchange.getResponse().setComplete();
+      sanitizedExchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+      return sanitizedExchange.getResponse().setComplete();
     }
   }
 

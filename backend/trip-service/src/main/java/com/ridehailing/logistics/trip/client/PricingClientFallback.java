@@ -16,4 +16,14 @@ public class PricingClientFallback implements PricingClient {
     return ApiResponse.error(
         "PRICING_SERVICE_UNAVAILABLE", "Pricing service is currently degraded", null);
   }
+
+  @Override
+  public ApiResponse<FareQuoteResponse> consumeQuote(UUID quoteId, UUID customerId) {
+    log.warn(
+        "Fallback triggered for PricingClient.consumeQuote with quoteId: {}, customerId: {}",
+        quoteId,
+        customerId);
+    return ApiResponse.error(
+        "PRICING_SERVICE_UNAVAILABLE", "Pricing service is currently degraded", null);
+  }
 }

@@ -38,8 +38,12 @@ public class PricingServiceImpl implements PricingService {
 
     PricingRule rule =
         pricingRuleRepository
-            .findFirstByServiceTypeAndRegionCodeAndIsActiveTrueOrderByVersionDesc(
-                request.serviceType(), region)
+            .findActiveRule(request.serviceType(), region, Instant.now())
+            .or(
+                () ->
+                    pricingRuleRepository
+                        .findFirstByServiceTypeAndRegionCodeAndIsActiveTrueOrderByVersionDesc(
+                            request.serviceType(), region))
             .orElseGet(
                 () ->
                     PricingRule.builder()
@@ -127,6 +131,36 @@ public class PricingServiceImpl implements PricingService {
             .findById(quoteId)
             .orElseThrow(
                 () -> BaseDomainException.notFound("QUOTE_NOT_FOUND", "Fare quote not found"));
+    return toResponse(quote);
+  }
+
+  @Override
+  @Transactional
+  public FareQuoteResponse consumeQuote(UUID quoteId, UUID customerId) {
+    FareQuote quote =
+        fareQuoteRepository
+            .findById(quoteId)
+            .orElseThrow(
+                () -> BaseDomainException.notFound("QUOTE_NOT_FOUND", "Fare quote not found"));
+
+    if (!quote.getCustomerId().equals(customerId)) {
+      throw BaseDomainException.forbidden(
+          "QUOTE_ACCESS_DENIED", "Quote does not belong to customer " + customerId);
+    }
+
+    if (quote.isUsed()) {
+      throw BaseDomainException.conflict(
+          "QUOTE_ALREADY_USED", "Fare quote has already been consumed");
+    }
+
+    if (quote.getExpiresAt().isBefore(Instant.now())) {
+      throw BaseDomainException.badRequest("QUOTE_EXPIRED", "Fare quote has expired");
+    }
+
+    quote.setUsed(true);
+    fareQuoteRepository.save(quote);
+    log.info("Fare quote {} successfully consumed for customer {}", quoteId, customerId);
+
     return toResponse(quote);
   }
 

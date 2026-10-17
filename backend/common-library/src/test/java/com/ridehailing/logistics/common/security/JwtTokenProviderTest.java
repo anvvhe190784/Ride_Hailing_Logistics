@@ -46,4 +46,16 @@ class JwtTokenProviderTest {
   void shouldReturnFalseForInvalidToken() {
     assertFalse(jwtTokenProvider.validateToken("invalid.token.string"));
   }
+
+  @Test
+  void shouldWorkWithExplicitSecret() {
+    String customSecret = "this-is-a-custom-32-byte-secret-for-testing!!";
+    JwtTokenProvider customProvider = new JwtTokenProvider(customSecret);
+    UUID userId = UUID.randomUUID();
+    String token = customProvider.generateAccessToken(userId, "+84123456789", UserRole.CUSTOMER);
+
+    assertNotNull(token);
+    assertTrue(customProvider.validateToken(token));
+    assertEquals(userId, customProvider.getUserIdFromToken(token));
+  }
 }

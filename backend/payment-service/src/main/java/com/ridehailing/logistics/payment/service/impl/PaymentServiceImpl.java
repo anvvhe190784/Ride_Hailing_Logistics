@@ -66,48 +66,82 @@ public class PaymentServiceImpl implements PaymentService {
     log.info(
         "Processed payment ID {} for Trip ID {}, amount: {} VND", payment.getId(), tripId, amount);
 
-    // FR-WAL-003, BR-012: Credit driver wallet using Immutable Ledger
+    // FR-WAL-003, BR-012: Update driver wallet using Immutable Ledger with Pessimistic Lock
     if (driverId != null && amount.compareTo(BigDecimal.ZERO) > 0) {
       Wallet wallet =
           walletRepository
-              .findByDriverId(driverId)
+              .findByDriverIdForUpdate(driverId)
               .orElseGet(
                   () ->
                       walletRepository.save(
                           Wallet.builder().driverId(driverId).balance(BigDecimal.ZERO).build()));
 
       BigDecimal commission = amount.multiply(COMMISSION_RATE).setScale(2, RoundingMode.HALF_UP);
-      BigDecimal netEarning = amount.subtract(commission).setScale(2, RoundingMode.HALF_UP);
-      BigDecimal newBalance = wallet.getBalance().add(netEarning);
 
-      wallet.setBalance(newBalance);
-      walletRepository.save(wallet);
+      if (method == PaymentMethod.CASH) {
+        // Driver collected cash directly: debit 20% platform commission from wallet
+        BigDecimal newBalance = wallet.getBalance().subtract(commission);
+        wallet.setBalance(newBalance);
+        walletRepository.save(wallet);
 
-      WalletEntry entry =
-          WalletEntry.builder()
-              .walletId(wallet.getId())
-              .entryType(WalletEntryType.TRIP_EARNING)
-              .amount(netEarning)
-              .balanceAfter(newBalance)
-              .referenceType("TRIP")
-              .referenceId(tripId.toString())
-              .description(
-                  "Earning from completed trip "
-                      + tripId
-                      + " (Fare: "
-                      + amount
-                      + " - Commission: "
-                      + commission
-                      + ")")
-              .status("POSTED")
-              .build();
+        WalletEntry entry =
+            WalletEntry.builder()
+                .walletId(wallet.getId())
+                .entryType(WalletEntryType.COMMISSION_DEBIT)
+                .amount(commission) // Positive amount per DB CHECK (amount > 0)
+                .balanceAfter(newBalance)
+                .referenceType("TRIP")
+                .referenceId(tripId.toString())
+                .description(
+                    "Platform commission (20%) deducted for cash trip "
+                        + tripId
+                        + " (Fare: "
+                        + amount
+                        + ")")
+                .status("POSTED")
+                .build();
 
-      walletEntryRepository.save(entry);
-      log.info(
-          "Recorded wallet ledger entry for driver {}: +{} VND, new balance: {} VND",
-          driverId,
-          netEarning,
-          newBalance);
+        walletEntryRepository.save(entry);
+        log.info(
+            "Debited commission for cash trip {}: driver {}, -{} VND, new balance: {} VND",
+            tripId,
+            driverId,
+            commission,
+            newBalance);
+      } else {
+        // Wallet or Card: credit net earnings (80%) to driver wallet
+        BigDecimal netEarning = amount.subtract(commission).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal newBalance = wallet.getBalance().add(netEarning);
+        wallet.setBalance(newBalance);
+        walletRepository.save(wallet);
+
+        WalletEntry entry =
+            WalletEntry.builder()
+                .walletId(wallet.getId())
+                .entryType(WalletEntryType.TRIP_EARNING_CREDIT)
+                .amount(netEarning)
+                .balanceAfter(newBalance)
+                .referenceType("TRIP")
+                .referenceId(tripId.toString())
+                .description(
+                    "Net earning (80%) credited for cashless trip "
+                        + tripId
+                        + " (Fare: "
+                        + amount
+                        + " - Commission: "
+                        + commission
+                        + ")")
+                .status("POSTED")
+                .build();
+
+        walletEntryRepository.save(entry);
+        log.info(
+            "Credited net earning for cashless trip {}: driver {}, +{} VND, new balance: {} VND",
+            tripId,
+            driverId,
+            netEarning,
+            newBalance);
+      }
     }
   }
 
@@ -122,6 +156,14 @@ public class PaymentServiceImpl implements PaymentService {
   public List<WalletEntry> getWalletStatement(UUID driverId) {
     Wallet wallet = findWalletOrThrow(driverId);
     return walletEntryRepository.findByWalletIdOrderByCreatedAtDesc(wallet.getId());
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public org.springframework.data.domain.Page<WalletEntry> getWalletStatement(
+      UUID driverId, org.springframework.data.domain.Pageable pageable) {
+    Wallet wallet = findWalletOrThrow(driverId);
+    return walletEntryRepository.findByWalletIdOrderByCreatedAtDesc(wallet.getId(), pageable);
   }
 
   private Wallet findWalletOrThrow(UUID driverId) {

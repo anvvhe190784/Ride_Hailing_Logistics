@@ -32,3 +32,6 @@ Thumbs.db
 # OS temporary files
 *.tmp
 *.bak
+
+# Code Review Graph local index
+.code-review-graph/

@@ -1,19 +1,22 @@
 package com.ridehailing.logistics.trip.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ridehailing.logistics.common.domain.enums.DriverAvailabilityStatus;
 import com.ridehailing.logistics.common.domain.enums.TripStatus;
 import com.ridehailing.logistics.common.dto.ApiResponse;
 import com.ridehailing.logistics.common.dto.FareQuoteResponse;
 import com.ridehailing.logistics.common.event.TripCompletedEvent;
 import com.ridehailing.logistics.common.exception.BaseDomainException;
+import com.ridehailing.logistics.trip.client.DriverClient;
+import com.ridehailing.logistics.trip.client.LocationClient;
 import com.ridehailing.logistics.trip.client.PricingClient;
 import com.ridehailing.logistics.trip.domain.entity.DriverOffer;
 import com.ridehailing.logistics.trip.domain.entity.Trip;
 import com.ridehailing.logistics.trip.dto.CreateTripRequest;
 import com.ridehailing.logistics.trip.dto.DriverOfferResponse;
+import com.ridehailing.logistics.trip.dto.NearbyDriverResponse;
 import com.ridehailing.logistics.trip.dto.TripDetailResponse;
 import com.ridehailing.logistics.trip.event.TripEventProducer;
-import com.ridehailing.logistics.trip.lock.RedisDistributedLockService;
 import com.ridehailing.logistics.trip.repository.DriverOfferRepository;
 import com.ridehailing.logistics.trip.repository.TripRepository;
 import com.ridehailing.logistics.trip.service.TripService;
@@ -40,7 +43,8 @@ public class TripServiceImpl implements TripService {
   private final TripRepository tripRepository;
   private final DriverOfferRepository driverOfferRepository;
   private final PricingClient pricingClient;
-  private final RedisDistributedLockService lockService;
+  private final LocationClient locationClient;
+  private final DriverClient driverClient;
   private final TripEventProducer eventProducer;
   private final ObjectMapper objectMapper;
 
@@ -56,18 +60,20 @@ public class TripServiceImpl implements TripService {
       return toResponse(existingTrip.get());
     }
 
-    // Fetch quote from pricing service (or fallback)
-    ApiResponse<FareQuoteResponse> quoteRes = pricingClient.getQuote(request.quoteId());
+    // Check if quote has already been used for a trip
+    if (tripRepository.existsByQuoteId(request.quoteId())) {
+      throw BaseDomainException.conflict(
+          "QUOTE_ALREADY_USED", "A trip has already been created for this quote");
+    }
+
+    // Consume quote atomically via pricing-service
+    ApiResponse<FareQuoteResponse> quoteRes =
+        pricingClient.consumeQuote(request.quoteId(), customerId);
     if (quoteRes == null || quoteRes.getData() == null) {
-      throw BaseDomainException.notFound(
-          "QUOTE_NOT_FOUND", "Specified fare quote not found or expired");
+      throw BaseDomainException.badRequest(
+          "QUOTE_CONSUME_FAILED", "Failed to consume fare quote or quote is invalid/expired");
     }
     FareQuoteResponse quote = quoteRes.getData();
-
-    if (quote.expiresAt().isBefore(Instant.now())) {
-      throw BaseDomainException.businessRuleViolation(
-          "Fare quote has expired. Please request a new quote.");
-    }
 
     String quoteSnapshot;
     try {
@@ -94,6 +100,27 @@ public class TripServiceImpl implements TripService {
 
     trip = tripRepository.save(trip);
     log.info("Created trip code {} with ID {} in MATCHING status", tripCode, trip.getId());
+
+    // Trigger driver dispatch by finding nearby available drivers
+    try {
+      ApiResponse<List<NearbyDriverResponse>> driversRes =
+          locationClient.getNearbyDrivers(21.0285, 105.8542, 3000.0, 5);
+      if (driversRes != null && driversRes.getData() != null) {
+        for (NearbyDriverResponse driver : driversRes.getData()) {
+          DriverOffer offer =
+              DriverOffer.builder()
+                  .tripId(trip.getId())
+                  .driverId(driver.driverId())
+                  .status("PENDING")
+                  .estimatedPickupDistanceMeters((int) Math.round(driver.distanceMeters()))
+                  .expiresAt(Instant.now().plus(Duration.ofSeconds(15)))
+                  .build();
+          driverOfferRepository.save(offer);
+        }
+      }
+    } catch (Exception e) {
+      log.warn("Failed to dispatch driver offers for trip {}: {}", trip.getId(), e.getMessage());
+    }
 
     return toResponse(trip);
   }
@@ -129,64 +156,52 @@ public class TripServiceImpl implements TripService {
       return toOfferResponse(offer);
     }
 
-    // FR-MAT-010, BR-002: Atomic acceptance with Redis Distributed Lock
-    String lockKey = "lock:driver:" + driverId;
-    boolean locked = lockService.acquireLock(lockKey, Duration.ofSeconds(5));
-    if (!locked) {
-      throw BaseDomainException.conflict(
-          "CONCURRENT_OPERATION", "Operation is being processed. Please retry.");
-    }
-
-    try {
-      // Check if driver is already on active trip
-      boolean hasActiveTrip =
-          tripRepository.existsByDriverIdAndStatusIn(
-              driverId,
-              List.of(
-                  TripStatus.ACCEPTED,
-                  TripStatus.PICKING_UP,
-                  TripStatus.ARRIVED,
-                  TripStatus.IN_TRIP));
-      if (hasActiveTrip) {
-        offer.setStatus(STATUS_REJECTED);
-        driverOfferRepository.save(offer);
-        throw BaseDomainException.conflict(
-            "DRIVER_ALREADY_ASSIGNED", "Driver is already assigned to an active trip");
-      }
-
-      Trip trip =
-          tripRepository
-              .findById(offer.getTripId())
-              .orElseThrow(
-                  () -> BaseDomainException.notFound(ERR_TRIP_NOT_FOUND, MSG_TRIP_NOT_FOUND));
-
-      if (trip.getStatus() != TripStatus.MATCHING) {
-        offer.setStatus(STATUS_REJECTED);
-        driverOfferRepository.save(offer);
-        throw BaseDomainException.conflict(
-            "TRIP_ALREADY_ASSIGNED", "Trip is no longer waiting for a driver");
-      }
-
-      // Assign driver atomically
-      trip.setDriverId(driverId);
-      trip.setStatus(TripStatus.ACCEPTED);
-      trip.setAcceptedAt(Instant.now());
-      tripRepository.save(trip);
-
-      offer.setStatus("ACCEPTED");
+    // Check if driver is already on active trip
+    boolean hasActiveTrip =
+        tripRepository.existsByDriverIdAndStatusIn(
+            driverId,
+            List.of(
+                TripStatus.ACCEPTED,
+                TripStatus.PICKING_UP,
+                TripStatus.ARRIVED,
+                TripStatus.IN_TRIP));
+    if (hasActiveTrip) {
+      offer.setStatus(STATUS_REJECTED);
       offer.setRespondedAt(Instant.now());
       driverOfferRepository.save(offer);
-
-      log.info("Driver ID {} accepted Trip ID {} successfully", driverId, trip.getId());
-      return toOfferResponse(offer);
-    } finally {
-      lockService.releaseLock(lockKey);
+      throw BaseDomainException.conflict(
+          "DRIVER_ALREADY_ASSIGNED", "Driver is already assigned to an active trip");
     }
+
+    // Atomic CAS update: claim trip
+    int updatedRows =
+        tripRepository.claimTripAtomically(offer.getTripId(), driverId, Instant.now());
+    if (updatedRows == 0) {
+      offer.setStatus(STATUS_REJECTED);
+      offer.setRespondedAt(Instant.now());
+      driverOfferRepository.save(offer);
+      throw BaseDomainException.conflict(
+          "TRIP_ALREADY_ASSIGNED",
+          "Trip is no longer available or was already accepted by another driver");
+    }
+
+    offer.setStatus("ACCEPTED");
+    offer.setRespondedAt(Instant.now());
+    driverOfferRepository.save(offer);
+
+    log.info("Driver ID {} atomically claimed and accepted Trip ID {}", driverId, offer.getTripId());
+    return toOfferResponse(offer);
   }
 
   @Override
   @Transactional
   public TripDetailResponse updateTripStatus(UUID tripId, UUID actorId, TripStatus nextStatus) {
+    if (nextStatus == TripStatus.ACCEPTED) {
+      throw BaseDomainException.badRequest(
+          "INVALID_STATE_TRANSITION",
+          "Direct transition to ACCEPTED is disallowed; must use respondOffer");
+    }
+
     Trip trip =
         tripRepository
             .findById(tripId)
@@ -194,6 +209,19 @@ public class TripServiceImpl implements TripService {
                 () -> BaseDomainException.notFound(ERR_TRIP_NOT_FOUND, MSG_TRIP_NOT_FOUND));
 
     validateStateTransition(trip.getStatus(), nextStatus);
+
+    // Verify actor authorization on the trip
+    if (nextStatus == TripStatus.CANCELLED) {
+      if (!actorId.equals(trip.getCustomerId()) && !actorId.equals(trip.getDriverId())) {
+        throw BaseDomainException.forbidden(
+            "ACCESS_DENIED", "Only trip participants can cancel this trip");
+      }
+    } else {
+      if (trip.getDriverId() == null || !actorId.equals(trip.getDriverId())) {
+        throw BaseDomainException.forbidden(
+            "ACCESS_DENIED", "Only the assigned driver can update trip progress");
+      }
+    }
 
     trip.setStatus(nextStatus);
     Instant now = Instant.now();
@@ -218,6 +246,35 @@ public class TripServiceImpl implements TripService {
               .build();
 
       eventProducer.publishTripCompleted(event, UUID.randomUUID().toString());
+
+      if (trip.getDriverId() != null) {
+        try {
+          driverClient.updateDriverAvailability(
+              trip.getDriverId(), DriverAvailabilityStatus.AVAILABLE);
+        } catch (Exception e) {
+          log.warn(
+              "Failed to notify driver-service to release driver {} on completion: {}",
+              trip.getDriverId(),
+              e.getMessage());
+        }
+      }
+    } else if (nextStatus == TripStatus.CANCELLED) {
+      trip.setCancelledAt(now);
+      trip.setCancelledBy(actorId);
+      if (trip.getCancellationReason() == null) {
+        trip.setCancellationReason("Cancelled by " + actorId);
+      }
+      if (trip.getDriverId() != null) {
+        try {
+          driverClient.updateDriverAvailability(
+              trip.getDriverId(), DriverAvailabilityStatus.AVAILABLE);
+        } catch (Exception e) {
+          log.warn(
+              "Failed to notify driver-service to release driver {}: {}",
+              trip.getDriverId(),
+              e.getMessage());
+        }
+      }
     }
 
     trip = tripRepository.save(trip);
@@ -241,9 +298,7 @@ public class TripServiceImpl implements TripService {
         switch (current) {
           case CREATED -> next == TripStatus.MATCHING || next == TripStatus.CANCELLED;
           case MATCHING ->
-              next == TripStatus.ACCEPTED
-                  || next == TripStatus.NO_DRIVER
-                  || next == TripStatus.CANCELLED;
+              next == TripStatus.NO_DRIVER || next == TripStatus.CANCELLED;
           case ACCEPTED -> next == TripStatus.PICKING_UP || next == TripStatus.CANCELLED;
           case PICKING_UP -> next == TripStatus.ARRIVED || next == TripStatus.CANCELLED;
           case ARRIVED -> next == TripStatus.IN_TRIP || next == TripStatus.CANCELLED;

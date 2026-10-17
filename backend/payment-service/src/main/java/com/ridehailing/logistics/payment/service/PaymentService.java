@@ -7,6 +7,9 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 public interface PaymentService {
   void processTripPayment(
       UUID tripId,
@@ -19,4 +22,6 @@ public interface PaymentService {
   Wallet getWalletByDriver(UUID driverId);
 
   List<WalletEntry> getWalletStatement(UUID driverId);
+
+  Page<WalletEntry> getWalletStatement(UUID driverId, Pageable pageable);
 }

@@ -38,4 +38,11 @@ public class SecurityConfig {
   public PasswordEncoder passwordEncoder() {
     return new BCryptPasswordEncoder();
   }
+
+  @Bean
+  public com.ridehailing.logistics.common.security.JwtTokenProvider jwtTokenProvider(
+      @org.springframework.beans.factory.annotation.Value("${app.security.jwt.secret:}")
+          String jwtSecret) {
+    return new com.ridehailing.logistics.common.security.JwtTokenProvider(jwtSecret);
+  }
 }

@@ -2,6 +2,7 @@ package com.ridehailing.logistics.driver.service.impl;
 
 import com.ridehailing.logistics.common.domain.enums.DriverAvailabilityStatus;
 import com.ridehailing.logistics.common.domain.enums.DriverReviewStatus;
+import com.ridehailing.logistics.common.domain.enums.VehicleStatus;
 import com.ridehailing.logistics.common.dto.DriverProfileResponse;
 import com.ridehailing.logistics.common.exception.BaseDomainException;
 import com.ridehailing.logistics.driver.domain.entity.DriverProfile;
@@ -86,9 +87,11 @@ public class DriverProfileServiceImpl implements DriverProfileService {
             "Only APPROVED drivers can switch to AVAILABLE status");
       }
       List<Vehicle> vehicles = vehicleRepository.findByDriverId(driverId);
-      if (vehicles.isEmpty()) {
+      boolean hasActiveVehicle =
+          vehicles.stream().anyMatch(v -> v.getStatus() == VehicleStatus.ACTIVE);
+      if (!hasActiveVehicle) {
         throw BaseDomainException.businessRuleViolation(
-            "Driver must register at least one vehicle before going online");
+            "Driver must have at least one active vehicle before going online");
       }
     }
 

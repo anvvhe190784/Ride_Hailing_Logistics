@@ -17,4 +17,9 @@ public interface PricingClient {
 
   @GetMapping("/api/v1/pricing/quote/{quoteId}")
   ApiResponse<FareQuoteResponse> getQuote(@PathVariable("quoteId") UUID quoteId);
+
+  @org.springframework.web.bind.annotation.PostMapping("/api/v1/pricing/quotes/{quoteId}/consume")
+  ApiResponse<FareQuoteResponse> consumeQuote(
+      @PathVariable("quoteId") UUID quoteId,
+      @org.springframework.web.bind.annotation.RequestParam("customerId") UUID customerId);
 }

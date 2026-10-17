@@ -1,5 +1,7 @@
 package com.ridehailing.logistics.iam.service.impl;
 
+import com.ridehailing.logistics.common.domain.enums.AccountStatus;
+import com.ridehailing.logistics.common.domain.enums.UserRole;
 import com.ridehailing.logistics.common.exception.BaseDomainException;
 import com.ridehailing.logistics.common.security.JwtTokenProvider;
 import com.ridehailing.logistics.common.security.SecurityConstants;
@@ -27,11 +29,17 @@ public class AuthServiceImpl implements AuthService {
   private final UserRepository userRepository;
   private final UserMapper userMapper;
   private final PasswordEncoder passwordEncoder;
-  private final JwtTokenProvider jwtTokenProvider = new JwtTokenProvider();
+  private final JwtTokenProvider jwtTokenProvider;
 
   @Override
   @Transactional
   public AuthResponse register(RegisterRequest request) {
+    if (request.role() != UserRole.CUSTOMER && request.role() != UserRole.DRIVER) {
+      throw BaseDomainException.badRequest(
+          "INVALID_REGISTRATION_ROLE",
+          "Self-registration is only allowed for CUSTOMER or DRIVER roles");
+    }
+
     if (userRepository.existsByPhone(request.phone())) {
       throw BaseDomainException.conflict(
           "PHONE_ALREADY_REGISTERED", "Phone number is already registered");
@@ -80,6 +88,11 @@ public class AuthServiceImpl implements AuthService {
           "INVALID_CREDENTIALS", "Invalid phone number or password");
     }
 
+    if (user.getStatus() != AccountStatus.ACTIVE) {
+      throw BaseDomainException.forbidden(
+          "ACCOUNT_NOT_ACTIVE", "Account is not active or has been suspended");
+    }
+
     String accessToken =
         jwtTokenProvider.generateAccessToken(user.getId(), user.getPhone(), user.getRole());
     String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId());
@@ -94,16 +107,29 @@ public class AuthServiceImpl implements AuthService {
   @Override
   @Transactional(readOnly = true)
   public AuthResponse refreshToken(RefreshTokenRequest request) {
-    if (!jwtTokenProvider.validateToken(request.refreshToken())) {
+    io.jsonwebtoken.Claims claims;
+    try {
+      claims = jwtTokenProvider.parseClaims(request.refreshToken());
+    } catch (Exception e) {
       throw BaseDomainException.badRequest(
           "INVALID_REFRESH_TOKEN", "Expired or invalid refresh token");
     }
 
-    UUID userId = jwtTokenProvider.getUserIdFromToken(request.refreshToken());
+    if (!jwtTokenProvider.isRefreshToken(claims)) {
+      throw BaseDomainException.badRequest(
+          "INVALID_REFRESH_TOKEN", "Provided token is not a refresh token");
+    }
+
+    UUID userId = UUID.fromString(claims.getSubject());
     User user =
         userRepository
             .findById(userId)
             .orElseThrow(() -> BaseDomainException.notFound("USER_NOT_FOUND", "User not found"));
+
+    if (user.getStatus() != AccountStatus.ACTIVE) {
+      throw BaseDomainException.forbidden(
+          "ACCOUNT_NOT_ACTIVE", "Account is not active or has been suspended");
+    }
 
     String newAccessToken =
         jwtTokenProvider.generateAccessToken(user.getId(), user.getPhone(), user.getRole());

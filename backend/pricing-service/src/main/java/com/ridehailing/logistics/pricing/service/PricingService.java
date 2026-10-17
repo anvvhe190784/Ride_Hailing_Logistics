@@ -8,4 +8,6 @@ public interface PricingService {
   FareQuoteResponse createQuote(UUID customerId, FareEstimateRequest request);
 
   FareQuoteResponse getQuote(UUID quoteId);
+
+  FareQuoteResponse consumeQuote(UUID quoteId, UUID customerId);
 }

@@ -5,9 +5,11 @@ import com.ridehailing.logistics.common.dto.ApiResponse;
 import com.ridehailing.logistics.common.dto.DriverProfileResponse;
 import java.util.UUID;
 import org.springframework.cloud.openfeign.FeignClient;
+import com.ridehailing.logistics.common.security.SecurityConstants;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 
 //noinspection InjectedReferences
@@ -23,5 +25,6 @@ public interface DriverClient {
 
   @PutMapping("/api/v1/drivers/availability")
   ApiResponse<DriverProfileResponse> updateDriverAvailability(
+      @RequestHeader(SecurityConstants.HEADER_USER_ID) UUID driverId,
       @RequestParam("status") DriverAvailabilityStatus status);
 }

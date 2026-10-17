@@ -3,7 +3,7 @@
 > **Hệ thống đặt xe và giao hàng theo yêu cầu trong thời gian thực (Real-time Ride-Hailing & Logistics Platform)**  
 > **Mã dự án:** `SRS-RHL-002`  
 > **Kiến trúc:** Microservices Phân tán, Domain-Driven Design (DDD), Event-Driven Architecture (EDA)  
-> **Ngôn ngữ & Nền tảng:** Java 21 LTS, Spring Boot 3.4.4, Spring Cloud 2024.0.1, PostgreSQL 18.3 + PostGIS 3.6.2, Redis
+> **Ngôn ngữ & Nền tảng:** Java 21 LTS, Spring Boot 3.4.4, Spring Cloud 2024.0.1, PostgreSQL 16 + PostGIS 3.4, Redis
 > 7.x, Apache Kafka 3.x, Docker
 
 ---
@@ -41,7 +41,7 @@ tài chính tuyệt đối.
 | **Service Discovery**      | Netflix Eureka Server                     | Quản lý vòng đời dịch vụ, Service Registry, Client-side Load Balancing       |
 | **Config Center**          | Spring Cloud Config Server                | Quản lý cấu hình tập trung                                                   |
 | **Inter-service Sync**     | Spring Cloud OpenFeign + Resilience4j     | Giao tiếp REST nội bộ, Circuit Breaker, Retry, Fallback an toàn              |
-| **Database**               | PostgreSQL 18.3 + PostGIS 3.6.2           | 7 Schemas độc lập, GiST Spatial Indexing (EPSG:4326), Partial Unique Indexes |
+| **Database**               | PostgreSQL 16 + PostGIS 3.4               | 7 Schemas độc lập, GiST Spatial Indexing (EPSG:4326), Partial Unique Indexes |
 | **Real-time Cache & Lock** | Redis 7.x (Jedis / Redisson)              | Redis GEO (GEOADD, GEORADIUS), Distributed Locks (khóa tài xế/cuốc xe)       |
 | **Event Broker**           | Apache Kafka 3.x                          | Xử lý sự kiện bất đồng bộ, Transactional Outbox, Pub/Sub                     |
 | **Security**               | Spring Security 6.x + JJWT 0.12.6         | Stateless JWT Access Token (15m), Refresh Token (7d), BCrypt (factor 12)     |
@@ -129,8 +129,6 @@ Bounded Contexts, bảo đảm tính cô lập dữ liệu tuyệt đối giữa
 ```mermaid
 erDiagram
 %% IAM SCHEMA
-    USERS ||--o{ USER_ROLES: has
-    ROLES ||--o{ USER_ROLES: assigns
     USERS ||--o{ REFRESH_TOKENS: owns
     USERS ||--o{ IAM_AUDIT_LOGS: tracks
 %% DRIVER SCHEMA
@@ -138,7 +136,7 @@ erDiagram
     DRIVER_PROFILES ||--o{ DRIVER_DOCUMENTS: uploads
     DRIVER_PROFILES ||--o{ DRIVER_AUDIT_LOGS: audits
 %% LOCATION SCHEMA
-    DRIVER_LOCATIONS ||--o{ DRIVER_TELEMETRY_HISTORY: logs
+    DRIVER_LATEST_LOCATIONS ||--o{ DRIVER_TELEMETRY_HISTORY: logs
 %% PRICING SCHEMA
     PRICING_RULES ||--o{ FARE_QUOTES: applies_to
 %% TRIP SCHEMA
@@ -153,23 +151,15 @@ erDiagram
 
     USERS {
         uuid id PK
-        string phone_number UK
+        string phone UK
         string email UK
         string password_hash
         string full_name
+        string role
         string status
-        boolean is_verified
+        int failed_login_attempts
+        timestamp locked_until
         timestamp created_at
-    }
-
-    ROLES {
-        int id PK
-        string role_name UK
-    }
-
-    USER_ROLES {
-        uuid user_id PK, FK
-        int role_id PK, FK
     }
 
     REFRESH_TOKENS {
@@ -181,23 +171,30 @@ erDiagram
     }
 
     DRIVER_PROFILES {
-        uuid id PK
+        uuid driver_id PK
         uuid user_id UK
-        string license_number UK
-        string national_id UK
-        string status
+        string id_card_number UK
+        date date_of_birth
+        string address
+        string review_status
+        string status_reason
+        uuid reviewer_id
+        timestamp reviewed_at
         string availability_status
         numeric rating
-        timestamp reviewed_at
+        int total_trips
     }
 
     VEHICLES {
         uuid id PK
         uuid driver_id FK
-        string vehicle_type
+        string type
         string license_plate UK
         string brand
+        string make
         string model
+        int year
+        string color
         string status
     }
 
@@ -210,33 +207,40 @@ erDiagram
         string status
     }
 
-    DRIVER_LOCATIONS {
+    DRIVER_LATEST_LOCATIONS {
         uuid driver_id PK
+        boolean is_available
+        bigint sequence_num
+        timestamp device_timestamp
+        timestamp server_timestamp
+        geometry location
         numeric latitude
         numeric longitude
-        geometry geom
+        numeric heading_degrees
+        numeric speed_mps
         numeric accuracy_meters
-        numeric speed
-        numeric heading
-        timestamp updated_at
     }
 
     DRIVER_TELEMETRY_HISTORY {
         bigint id PK
+        timestamp recorded_at PK
         uuid driver_id FK
-        geometry geom
-        numeric speed
-        timestamp recorded_at
+        geometry location
+        numeric speed_mps
+        numeric heading_degrees
     }
 
     PRICING_RULES {
-        int id PK
+        uuid id PK
         string service_type
-        string city_code
+        string region_code
         numeric base_fare
-        numeric price_per_km
-        numeric price_per_minute
-        numeric peak_hour_multiplier
+        numeric per_km_rate
+        numeric per_minute_rate
+        numeric minimum_fare
+        int version
+        timestamp effective_from
+        timestamp effective_to
         boolean is_active
     }
 
@@ -244,27 +248,39 @@ erDiagram
         uuid id PK
         uuid customer_id
         string service_type
-        numeric distance_km
-        numeric estimated_duration
+        geometry pickup_point
+        geometry dropoff_point
+        numeric base_price
+        numeric distance_price
+        numeric duration_price
         numeric surge_multiplier
         numeric total_fare
+        string currency
+        int rule_version
         timestamp expires_at
         boolean is_used
     }
 
     TRIPS {
         uuid id PK
+        string trip_code UK
         uuid customer_id
         uuid driver_id
         uuid quote_id
         string service_type
         string status
-        numeric fare_amount
-        string pickup_address
-        string dropoff_address
+        string idempotency_key UK
+        jsonb quote_snapshot
+        numeric final_fare
+        string currency
+        string payment_method
+        bigint version
+        timestamp requested_at
         timestamp accepted_at
+        timestamp arrived_at
+        timestamp in_trip_at
         timestamp completed_at
-        timestamp created_at
+        timestamp cancelled_at
     }
 
     TRIP_STOPS {
@@ -282,9 +298,10 @@ erDiagram
         uuid trip_id FK
         uuid driver_id
         string status
-        int sequence_number
+        int estimated_pickup_distance_meters
+        timestamp offered_at
         timestamp expires_at
-        timestamp created_at
+        timestamp responded_at
     }
 
     TRIP_STATUS_HISTORY {
@@ -303,16 +320,19 @@ erDiagram
         uuid driver_id UK
         numeric balance
         string currency
-        boolean is_locked
+        string status
+        bigint version
         timestamp updated_at
     }
 
     WALLET_ENTRIES {
         uuid id PK
         uuid wallet_id FK
+        uuid trip_id
         string entry_type
         numeric amount
         numeric balance_after
+        string reference_type
         string reference_id
         string description
         timestamp created_at
@@ -320,12 +340,15 @@ erDiagram
 
     PAYMENTS {
         uuid id PK
-        uuid trip_id UK
+        uuid trip_id
         uuid customer_id
-        string payment_method
+        string provider
         numeric amount
+        string currency
         string status
-        string transaction_reference
+        string provider_ref
+        string idempotency_key UK
+        timestamp paid_at
         timestamp created_at
     }
 
@@ -401,12 +424,11 @@ sequenceDiagram
     Note over Customer, Trip: Khách hàng xem giá và bấm nút "Xác nhận đặt xe"
     Customer ->> GW: POST /api/v1/trips (quoteId, pickupAddress, dropoffAddress)
     GW ->> Trip: Forward Create Trip
-    Trip ->> Pricing: OpenFeign validateQuote(quoteId, customerId)
-    Pricing ->> DB: Check quote exists, not expired, is_used = false
-    Pricing -->> Trip: Quote Valid (fare_amount confirmed)
-    Trip ->> DB: INSERT INTO trip.trips (status = 'SEARCHING', quote_snapshot)
-    Trip ->> DB: UPDATE pricing.fare_quotes SET is_used = true
-    Trip -->> GW: TripResponse (tripId, status: SEARCHING)
+    Trip ->> Pricing: OpenFeign POST /api/v1/pricing/quotes/{quoteId}/consume?customerId={customerId}
+    Pricing ->> DB: Check quote exists, not expired, is_used = false, UPDATE is_used = true
+    Pricing -->> Trip: Quote Valid & Consumed (FareQuoteResponse snapshot)
+    Trip ->> DB: INSERT INTO trip.trips (status = 'MATCHING', quote_snapshot)
+    Trip -->> GW: TripResponse (tripId, status: MATCHING)
     GW -->> Customer: 201 Created (Screen switches to Radar Searching)
 ```
 
@@ -501,7 +523,7 @@ sequenceDiagram
     participant Payment as 💳 payment-service
     participant DB as 🐘 PostgreSQL (billing.wallets & entries)
     Driver ->> Trip: PUT /api/v1/trips/{id}/complete
-    Trip ->> Trip: Validate state transition: IN_PROGRESS -> COMPLETED
+    Trip ->> Trip: Validate state transition: IN_TRIP -> COMPLETED
     Trip ->> Trip: Set completed_at = NOW()
     Trip ->> DB: UPDATE trip.trips SET status = 'COMPLETED'
     Trip ->> DB: INSERT INTO platform.outbox_events\n(event_type: 'TRIP_COMPLETED', payload: TripCompletedEvent)
@@ -514,9 +536,9 @@ sequenceDiagram
     Note over Payment, DB: Hạch toán Ví Tài Xế theo Bút toán Kế toán Kép Bất biến
     Payment ->> DB: SELECT * FROM billing.wallets WHERE driver_id = driverId FOR UPDATE
     Note over Payment: Chuyến tiền mặt: Tài xế đã cầm 100k tiền mặt của khách\nCông ty trừ 20% phí hoa hồng (20.000 VNĐ) vào ví tài xế
-    Payment ->> Payment: NewBalance = Balance - 20.000 VNĐ (Phải >= 0)
+    Payment ->> Payment: NewBalance = Balance - 20.000 VNĐ (Phải >= -100.000 VNĐ)
     Payment ->> DB: UPDATE billing.wallets SET balance = NewBalance
-    Payment ->> DB: INSERT INTO billing.wallet_entries\n(wallet_id, entry_type='DEBIT', amount=20.000, balance_after=NewBalance,\ndescription='Platform commission fee 20% for trip {tripId}')
+    Payment ->> DB: INSERT INTO billing.wallet_entries\n(wallet_id, entry_type='PLATFORM_COMMISSION', amount=20.000, balance_after=NewBalance,\ndescription='Platform commission fee 20% for trip {tripId}')
     Payment ->> DB: INSERT INTO platform.idempotency_keys (key: 'EVENT_TRIP_COMPLETED_{tripId}')
     Payment -->> Kafka: Acknowledge Offset (Commit)
 ```
@@ -531,22 +553,22 @@ Bất kỳ lệnh chuyển trạng thái nào nằm ngoài luồng định nghĩ
 
 ```mermaid
 stateDiagram-v2
-    [*] --> DRAFT: Khách hàng tạo yêu cầu từ Fare Quote
-    DRAFT --> SEARCHING: Khởi động Dispatch tìm tài xế gần
-    SEARCHING --> OFFERED: Tìm thấy ứng viên, gửi Offer (Hạn 15s)
-    SEARCHING --> CANCELLED: Khách hàng bấm hủy khi đang tìm (Miễn phí)
-    SEARCHING --> NO_DRIVER_FOUND: Hết thời gian tìm kiếm tối đa (3 phút)
-    OFFERED --> ACCEPTED: Tài xế bấm nhận cuốc (Redis Lock thành công)
-    OFFERED --> SEARCHING: Tài xế từ chối (REJECT) hoặc hết hạn (EXPIRED) 15s
-    OFFERED --> CANCELLED: Khách hàng bấm hủy chuyến
-    ACCEPTED --> ARRIVING: Tài xế di chuyển tới điểm đón
-    ACCEPTED --> CANCELLED: Khách/Tài xế hủy (Tính phí phạt nếu vi phạm)
-    ARRIVING --> IN_PROGRESS: Khách lên xe, tài xế bấm "Bắt đầu hành trình"
-    ARRIVING --> CANCELLED: Khách không xuất hiện (No-show > 5 phút)
-    IN_PROGRESS --> COMPLETED: Đến điểm trả, tài xế bấm "Hoàn tất chuyến"
+    [*] --> CREATED: Khách hàng tạo yêu cầu từ Fare Quote
+    CREATED --> MATCHING: Khởi động Dispatch tìm tài xế lân cận
+    MATCHING --> CANCELLED: Khách hàng hủy khi đang tìm (Miễn phí)
+    MATCHING --> NO_DRIVER: Hết thời gian tìm kiếm tối đa (3 phút)
+    MATCHING --> ACCEPTED: Tài xế chấp nhận Offer (Atomic CAS Update)
+    ACCEPTED --> PICKING_UP: Tài xế bắt đầu di chuyển tới điểm đón
+    ACCEPTED --> CANCELLED: Khách hoặc Tài xế hủy chuyến
+    PICKING_UP --> ARRIVED: Tài xế đã tới điểm đón khách
+    PICKING_UP --> CANCELLED: Hủy chuyến trước khi xe tới
+    ARRIVED --> IN_TRIP: Khách lên xe, bắt đầu hành trình
+    ARRIVED --> CANCELLED: Khách không xuất hiện (No-show > 5 phút)
+    IN_TRIP --> COMPLETED: Đến điểm trả, hoàn tất chuyến xe
+    IN_TRIP --> CANCELLED: Hủy khẩn cấp / Sự cố kỹ thuật hành trình
     COMPLETED --> [*]: Kích hoạt thanh toán, đối soát ví
-    CANCELLED --> [*]: Giải phóng tài xế, tính phí phạt nếu có
-    NO_DRIVER_FOUND --> [*]: Kết thúc phiên tìm kiếm
+    CANCELLED --> [*]: Giải phóng tài xế, tính phí phạt nếu vi phạm
+    NO_DRIVER --> [*]: Kết thúc phiên tìm kiếm
 ```
 
 ---
@@ -652,7 +674,6 @@ Dưới đây là bảng phân rã chi tiết toàn bộ các module và REST AP
   | `GET` | `/api/v1/wallets/me` | `ROLE_DRIVER` | Xem số dư ví tài xế hiện tại |
   | `GET` | `/api/v1/wallets/statement` | `ROLE_DRIVER` | Xem sao kê biến động số dư ví (Wallet Entries) |
   | `POST` | `/api/v1/wallets/topup` | `ROLE_DRIVER` | Nạp tiền vào ví tài xế qua cổng thanh toán |
-  | `POST` | `/api/v1/wallets/withdraw` | `ROLE_DRIVER` | Yêu cầu rút tiền từ ví về tài khoản ngân hàng |
   | `POST` | `/api/v1/payments/refund` | `ROLE_ADMIN` | Thực hiện hoàn tiền cho khách theo khiếu nại |
 
 ### 6.8. Module `discovery-service` (Port 8761) & `config-service` (Port 8888)
@@ -685,7 +706,7 @@ Dưới đây là bảng phân rã chi tiết toàn bộ các module và REST AP
        ```sql
        CREATE UNIQUE INDEX idx_trips_driver_active_unique 
        ON trip.trips (driver_id) 
-       WHERE status IN ('ACCEPTED', 'ARRIVING', 'IN_PROGRESS');
+       WHERE status IN ('ACCEPTED', 'PICKING_UP', 'ARRIVED', 'IN_TRIP');
        ```
        Dù lỗi logic ở tầng code xảy ra, tầng database vẫn ném lỗi `DataIntegrityViolationException`, đảm bảo 1 tài xế
        **không bao giờ** có 2 cuốc xe đang chạy đồng thời.

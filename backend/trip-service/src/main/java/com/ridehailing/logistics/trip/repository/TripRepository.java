@@ -2,10 +2,14 @@ package com.ridehailing.logistics.trip.repository;
 
 import com.ridehailing.logistics.common.domain.enums.TripStatus;
 import com.ridehailing.logistics.trip.domain.entity.Trip;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -15,9 +19,17 @@ public interface TripRepository extends JpaRepository<Trip, UUID> {
 
   Optional<Trip> findByTripCode(String tripCode);
 
+  boolean existsByQuoteId(UUID quoteId);
+
   List<Trip> findByCustomerIdOrderByCreatedAtDesc(UUID customerId);
 
   List<Trip> findByDriverIdOrderByCreatedAtDesc(UUID driverId);
 
   boolean existsByDriverIdAndStatusIn(UUID driverId, List<TripStatus> statuses);
+
+  @Modifying(clearAutomatically = true)
+  @Query(
+      "UPDATE Trip t SET t.driverId = :driverId, t.status = com.ridehailing.logistics.common.domain.enums.TripStatus.ACCEPTED, t.acceptedAt = :now, t.updatedAt = :now, t.version = t.version + 1 WHERE t.id = :tripId AND t.status = com.ridehailing.logistics.common.domain.enums.TripStatus.MATCHING AND t.driverId IS NULL")
+  int claimTripAtomically(
+      @Param("tripId") UUID tripId, @Param("driverId") UUID driverId, @Param("now") Instant now);
 }
