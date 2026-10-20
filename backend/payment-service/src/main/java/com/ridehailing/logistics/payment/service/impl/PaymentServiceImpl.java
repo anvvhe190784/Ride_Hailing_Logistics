@@ -19,6 +19,9 @@ import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -68,13 +71,7 @@ public class PaymentServiceImpl implements PaymentService {
 
     // FR-WAL-003, BR-012: Update driver wallet using Immutable Ledger with Pessimistic Lock
     if (driverId != null && amount.compareTo(BigDecimal.ZERO) > 0) {
-      Wallet wallet =
-          walletRepository
-              .findByDriverIdForUpdate(driverId)
-              .orElseGet(
-                  () ->
-                      walletRepository.save(
-                          Wallet.builder().driverId(driverId).balance(BigDecimal.ZERO).build()));
+      Wallet wallet = getOrCreateWallet(driverId);
 
       BigDecimal commission = amount.multiply(COMMISSION_RATE).setScale(2, RoundingMode.HALF_UP);
 
@@ -160,10 +157,29 @@ public class PaymentServiceImpl implements PaymentService {
 
   @Override
   @Transactional(readOnly = true)
-  public org.springframework.data.domain.Page<WalletEntry> getWalletStatement(
-      UUID driverId, org.springframework.data.domain.Pageable pageable) {
+  public Page<WalletEntry> getWalletStatement(UUID driverId, Pageable pageable) {
     Wallet wallet = findWalletOrThrow(driverId);
     return walletEntryRepository.findByWalletIdOrderByCreatedAtDesc(wallet.getId(), pageable);
+  }
+
+  public Wallet getOrCreateWallet(UUID driverId) {
+    Optional<Wallet> walletOpt = walletRepository.findByDriverIdForUpdate(driverId);
+    if (walletOpt.isPresent()) {
+      return walletOpt.get();
+    }
+    try {
+      walletRepository.insertWalletIfNotExists(driverId);
+    } catch (Exception ex) {
+      log.warn("Notice during wallet insert for driver {}: {}", driverId, ex.getMessage());
+    }
+    return walletRepository
+        .findByDriverIdForUpdate(driverId)
+        .or(() -> walletRepository.findByDriverId(driverId))
+        .orElseThrow(
+            () ->
+                new IllegalStateException(
+                    "Wallet was created concurrently but could not be retrieved for driver: "
+                        + driverId));
   }
 
   private Wallet findWalletOrThrow(UUID driverId) {

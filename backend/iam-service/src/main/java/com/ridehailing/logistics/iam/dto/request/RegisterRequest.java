@@ -1,6 +1,7 @@
 package com.ridehailing.logistics.iam.dto.request;
 
 import com.ridehailing.logistics.common.domain.enums.UserRole;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -13,7 +14,8 @@ public record RegisterRequest(
             regexp = "^(0|\\+84)\\d{9,10}$",
             message = "Invalid Vietnamese phone number format")
         String phone,
-    String email,
+    @Email(message = "Invalid email format")
+        String email,
     @NotBlank(message = "Password is required")
         @Size(min = 6, max = 50, message = "Password must be between 6 and 50 characters")
         String password,

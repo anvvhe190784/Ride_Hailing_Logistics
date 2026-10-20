@@ -2,6 +2,10 @@ package com.ridehailing.logistics.trip.event;
 
 import com.ridehailing.logistics.common.event.EventEnvelope;
 import com.ridehailing.logistics.common.event.TripCompletedEvent;
+import com.ridehailing.logistics.trip.domain.entity.Trip;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -14,6 +18,22 @@ public class TripEventProducer {
 
   public static final String TOPIC_TRIP_COMPLETED = "trip.completed";
   private final KafkaTemplate<String, Object> kafkaTemplate;
+
+  public void publishTripCompleted(Trip trip) {
+    TripCompletedEvent event =
+        TripCompletedEvent.builder()
+            .tripId(trip.getId())
+            .tripCode(trip.getTripCode())
+            .customerId(trip.getCustomerId())
+            .driverId(trip.getDriverId())
+            .serviceType(trip.getServiceType())
+            .finalFare(trip.getFinalFare() != null ? trip.getFinalFare() : BigDecimal.ZERO)
+            .currency(trip.getCurrency())
+            .paymentMethod(trip.getPaymentMethod())
+            .completedAt(trip.getCompletedAt() != null ? trip.getCompletedAt() : Instant.now())
+            .build();
+    publishTripCompleted(event, UUID.randomUUID().toString());
+  }
 
   public void publishTripCompleted(TripCompletedEvent event, String correlationId) {
     EventEnvelope<TripCompletedEvent> envelope =

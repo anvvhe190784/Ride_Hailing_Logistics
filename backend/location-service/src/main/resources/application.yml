@@ -1,9 +1,12 @@
 server:
   port: 8083
+  shutdown: graceful
 
 spring:
   application:
     name: location-service
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
   config:
     # noinspection HttpUrlsUsage
     import: "optional:configserver:http://localhost:8888"
@@ -15,6 +18,12 @@ spring:
     username: postgres
     password: ${DB_PASSWORD:admin} # pragma: allowlist-secret
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 30
+      minimum-idle: 10
+      idle-timeout: 300000
+      max-lifetime: 1800000
+      connection-timeout: 5000
   jpa:
     open-in-view: false
     hibernate:
@@ -38,6 +47,9 @@ eureka:
     prefer-ip-address: true
 
 management:
+  endpoint:
+    health:
+      show-details: always
   endpoints:
     web:
       exposure:

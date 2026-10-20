@@ -8,13 +8,16 @@ import com.ridehailing.logistics.common.domain.enums.AccountStatus;
 import com.ridehailing.logistics.common.domain.enums.UserRole;
 import com.ridehailing.logistics.common.exception.BaseDomainException;
 import com.ridehailing.logistics.common.security.JwtTokenProvider;
+import com.ridehailing.logistics.iam.domain.entity.RefreshToken;
 import com.ridehailing.logistics.iam.domain.entity.User;
 import com.ridehailing.logistics.iam.dto.request.LoginRequest;
+import com.ridehailing.logistics.iam.dto.request.LogoutRequest;
 import com.ridehailing.logistics.iam.dto.request.RefreshTokenRequest;
 import com.ridehailing.logistics.iam.dto.request.RegisterRequest;
 import com.ridehailing.logistics.iam.dto.response.AuthResponse;
 import com.ridehailing.logistics.iam.dto.response.UserResponse;
 import com.ridehailing.logistics.iam.mapper.UserMapper;
+import com.ridehailing.logistics.iam.repository.RefreshTokenRepository;
 import com.ridehailing.logistics.iam.repository.UserRepository;
 import java.time.Instant;
 import java.util.Optional;
@@ -30,6 +33,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 class AuthServiceImplTest {
 
   @Mock private UserRepository userRepository;
+  @Mock private RefreshTokenRepository refreshTokenRepository;
   @Mock private UserMapper userMapper;
   @Mock private PasswordEncoder passwordEncoder;
 
@@ -41,7 +45,12 @@ class AuthServiceImplTest {
     jwtTokenProvider =
         new JwtTokenProvider("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
     authService =
-        new AuthServiceImpl(userRepository, userMapper, passwordEncoder, jwtTokenProvider);
+        new AuthServiceImpl(
+            userRepository,
+            refreshTokenRepository,
+            userMapper,
+            passwordEncoder,
+            jwtTokenProvider);
   }
 
   @Test
@@ -119,11 +128,64 @@ class AuthServiceImplTest {
             .role(UserRole.CUSTOMER)
             .status(AccountStatus.SUSPENDED)
             .build();
+    RefreshToken storedToken =
+        RefreshToken.builder()
+            .id(UUID.randomUUID())
+            .userId(userId)
+            .tokenHash("some-hash")
+            .expiresAt(Instant.now().plusSeconds(3600))
+            .revoked(false)
+            .build();
+    when(refreshTokenRepository.findByTokenHash(any())).thenReturn(Optional.of(storedToken));
     when(userRepository.findById(userId)).thenReturn(Optional.of(suspendedUser));
 
     BaseDomainException ex =
         assertThrows(BaseDomainException.class, () -> authService.refreshToken(refreshRequest));
     assertEquals(403, ex.getHttpStatus());
     assertEquals("ACCOUNT_NOT_ACTIVE", ex.getErrorCode());
+  }
+
+  @Test
+  void shouldSuccessfullyRevokeTokenOnLogout() {
+    UUID userId = UUID.randomUUID();
+    String refreshToken = jwtTokenProvider.generateRefreshToken(userId);
+    LogoutRequest logoutRequest = new LogoutRequest(refreshToken);
+
+    RefreshToken storedToken =
+        RefreshToken.builder()
+            .id(UUID.randomUUID())
+            .userId(userId)
+            .tokenHash("some-hash")
+            .expiresAt(Instant.now().plusSeconds(3600))
+            .revoked(false)
+            .build();
+    when(refreshTokenRepository.findByTokenHash(any())).thenReturn(Optional.of(storedToken));
+
+    authService.logout(logoutRequest);
+
+    assertTrue(storedToken.getRevoked());
+    verify(refreshTokenRepository).save(storedToken);
+  }
+
+  @Test
+  void shouldRejectRefreshTokenWhenTokenIsRevoked() {
+    UUID userId = UUID.randomUUID();
+    String refreshToken = jwtTokenProvider.generateRefreshToken(userId);
+    RefreshTokenRequest refreshRequest = new RefreshTokenRequest(refreshToken);
+
+    RefreshToken revokedToken =
+        RefreshToken.builder()
+            .id(UUID.randomUUID())
+            .userId(userId)
+            .tokenHash("some-hash")
+            .expiresAt(Instant.now().plusSeconds(3600))
+            .revoked(true)
+            .build();
+    when(refreshTokenRepository.findByTokenHash(any())).thenReturn(Optional.of(revokedToken));
+
+    BaseDomainException ex =
+        assertThrows(BaseDomainException.class, () -> authService.refreshToken(refreshRequest));
+    assertEquals(403, ex.getHttpStatus());
+    assertEquals("TOKEN_REVOKED", ex.getErrorCode());
   }
 }

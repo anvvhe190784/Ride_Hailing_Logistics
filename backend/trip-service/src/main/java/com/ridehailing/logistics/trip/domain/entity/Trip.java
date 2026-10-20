@@ -111,6 +111,9 @@ public class Trip {
   @Column(name = "package_description")
   private String packageDescription;
 
+  @Transient
+  private org.locationtech.jts.geom.Point pickupPoint;
+
   @Version
   @Column(name = "version", nullable = false)
   @Builder.Default

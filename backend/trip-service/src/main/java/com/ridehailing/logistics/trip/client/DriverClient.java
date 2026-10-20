@@ -26,5 +26,6 @@ public interface DriverClient {
   @PutMapping("/api/v1/drivers/availability")
   ApiResponse<DriverProfileResponse> updateDriverAvailability(
       @RequestHeader(SecurityConstants.HEADER_USER_ID) UUID driverId,
+      @RequestHeader(value = SecurityConstants.HEADER_USER_ROLE, defaultValue = "DRIVER") String role,
       @RequestParam("status") DriverAvailabilityStatus status);
 }

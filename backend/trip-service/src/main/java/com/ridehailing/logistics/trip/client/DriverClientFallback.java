@@ -20,7 +20,7 @@ public class DriverClientFallback implements DriverClient {
 
   @Override
   public ApiResponse<DriverProfileResponse> updateDriverAvailability(
-      UUID driverId, DriverAvailabilityStatus status) {
+      UUID driverId, String role, DriverAvailabilityStatus status) {
     log.warn(
         "Fallback triggered for DriverClient.updateDriverAvailability for driver {}: {}",
         driverId,

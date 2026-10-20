@@ -16,6 +16,7 @@ import com.ridehailing.logistics.trip.dto.CreateTripRequest;
 import com.ridehailing.logistics.trip.dto.DriverOfferResponse;
 import com.ridehailing.logistics.trip.dto.NearbyDriverResponse;
 import com.ridehailing.logistics.trip.dto.TripDetailResponse;
+import com.ridehailing.logistics.trip.event.TripCompletedInternalEvent;
 import com.ridehailing.logistics.trip.event.TripEventProducer;
 import com.ridehailing.logistics.trip.repository.DriverOfferRepository;
 import com.ridehailing.logistics.trip.repository.TripRepository;
@@ -23,11 +24,20 @@ import com.ridehailing.logistics.trip.service.TripService;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.locationtech.jts.geom.Coordinate;
+import org.locationtech.jts.geom.GeometryFactory;
+import org.locationtech.jts.geom.Point;
+import org.locationtech.jts.geom.PrecisionModel;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,9 +57,17 @@ public class TripServiceImpl implements TripService {
   private final DriverClient driverClient;
   private final TripEventProducer eventProducer;
   private final ObjectMapper objectMapper;
+  private final ApplicationEventPublisher applicationEventPublisher;
+
+  @Autowired
+  @Lazy
+  private TripService self;
+
+  private TripService getSelf() {
+    return self != null ? self : this;
+  }
 
   @Override
-  @Transactional
   public TripDetailResponse createTrip(UUID customerId, CreateTripRequest request) {
     // FR-TRIP-002: Idempotency Key check
     Optional<Trip> existingTrip = tripRepository.findByIdempotencyKey(request.idempotencyKey());
@@ -66,7 +84,7 @@ public class TripServiceImpl implements TripService {
           "QUOTE_ALREADY_USED", "A trip has already been created for this quote");
     }
 
-    // Consume quote atomically via pricing-service
+    // Consume quote atomically via pricing-service (Remote I/O outside @Transactional)
     ApiResponse<FareQuoteResponse> quoteRes =
         pricingClient.consumeQuote(request.quoteId(), customerId);
     if (quoteRes == null || quoteRes.getData() == null) {
@@ -84,6 +102,15 @@ public class TripServiceImpl implements TripService {
 
     String tripCode = "TRP-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
 
+    GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
+    Point pickupPoint;
+    if (quote.pickupLat() != null && quote.pickupLng() != null) {
+      pickupPoint =
+          geometryFactory.createPoint(new Coordinate(quote.pickupLng(), quote.pickupLat()));
+    } else {
+      pickupPoint = geometryFactory.createPoint(new Coordinate(105.8542, 21.0285));
+    }
+
     Trip trip =
         Trip.builder()
             .tripCode(tripCode)
@@ -96,16 +123,19 @@ public class TripServiceImpl implements TripService {
             .currency(quote.currency())
             .paymentMethod(request.paymentMethod())
             .status(TripStatus.MATCHING) // Direct transition to MATCHING per FR-TRIP-006
+            .pickupPoint(pickupPoint)
             .build();
 
-    trip = tripRepository.save(trip);
-    log.info("Created trip code {} with ID {} in MATCHING status", tripCode, trip.getId());
+    trip = getSelf().saveInitialTrip(trip);
 
-    // Trigger driver dispatch by finding nearby available drivers
+    // Trigger driver dispatch by finding nearby available drivers (Remote I/O outside @Transactional)
     try {
+      double pickupLat = trip.getPickupPoint() != null ? trip.getPickupPoint().getY() : 21.0285;
+      double pickupLng = trip.getPickupPoint() != null ? trip.getPickupPoint().getX() : 105.8542;
       ApiResponse<List<NearbyDriverResponse>> driversRes =
-          locationClient.getNearbyDrivers(21.0285, 105.8542, 3000.0, 5);
+          locationClient.getNearbyDrivers(pickupLat, pickupLng, 3000.0, 5);
       if (driversRes != null && driversRes.getData() != null) {
+        List<DriverOffer> offers = new ArrayList<>();
         for (NearbyDriverResponse driver : driversRes.getData()) {
           DriverOffer offer =
               DriverOffer.builder()
@@ -115,7 +145,10 @@ public class TripServiceImpl implements TripService {
                   .estimatedPickupDistanceMeters((int) Math.round(driver.distanceMeters()))
                   .expiresAt(Instant.now().plus(Duration.ofSeconds(15)))
                   .build();
-          driverOfferRepository.save(offer);
+          offers.add(offer);
+        }
+        if (!offers.isEmpty()) {
+          driverOfferRepository.saveAll(offers);
         }
       }
     } catch (Exception e) {
@@ -123,6 +156,16 @@ public class TripServiceImpl implements TripService {
     }
 
     return toResponse(trip);
+  }
+
+  @Override
+  @Transactional
+  public Trip saveInitialTrip(Trip trip) {
+    Point pickupPoint = trip.getPickupPoint();
+    Trip saved = tripRepository.save(trip);
+    saved.setPickupPoint(pickupPoint);
+    log.info("Created trip code {} with ID {} in MATCHING status", trip.getTripCode(), saved.getId());
+    return saved;
   }
 
   @Override
@@ -173,28 +216,43 @@ public class TripServiceImpl implements TripService {
           "DRIVER_ALREADY_ASSIGNED", "Driver is already assigned to an active trip");
     }
 
-    // Atomic CAS update: claim trip
-    int updatedRows =
-        tripRepository.claimTripAtomically(offer.getTripId(), driverId, Instant.now());
-    if (updatedRows == 0) {
-      offer.setStatus(STATUS_REJECTED);
+    try {
+      // Atomic CAS update: claim trip
+      int updatedRows =
+          tripRepository.claimTripAtomically(offer.getTripId(), driverId, Instant.now());
+      if (updatedRows == 0) {
+        offer.setStatus(STATUS_REJECTED);
+        offer.setRespondedAt(Instant.now());
+        driverOfferRepository.save(offer);
+        throw BaseDomainException.conflict(
+            "TRIP_ALREADY_ASSIGNED",
+            "Trip is no longer available or was already accepted by another driver");
+      }
+
+      offer.setStatus("ACCEPTED");
       offer.setRespondedAt(Instant.now());
       driverOfferRepository.save(offer);
+
+      log.info("Driver ID {} atomically claimed and accepted Trip ID {}", driverId, offer.getTripId());
+      return toOfferResponse(offer);
+    } catch (DataIntegrityViolationException ex) {
+      log.warn(
+          "DataIntegrityViolationException claiming trip {}: {}",
+          offer.getTripId(),
+          ex.getMessage());
+      offer.setStatus(STATUS_REJECTED);
+      offer.setRespondedAt(Instant.now());
+      try {
+        driverOfferRepository.save(offer);
+      } catch (Exception ignored) {
+        // Ignored if transaction marked rollback
+      }
       throw BaseDomainException.conflict(
-          "TRIP_ALREADY_ASSIGNED",
-          "Trip is no longer available or was already accepted by another driver");
+          "TRIP_ALREADY_CLAIMED", "Chuyến đi đã được tài xế khác tiếp nhận");
     }
-
-    offer.setStatus("ACCEPTED");
-    offer.setRespondedAt(Instant.now());
-    driverOfferRepository.save(offer);
-
-    log.info("Driver ID {} atomically claimed and accepted Trip ID {}", driverId, offer.getTripId());
-    return toOfferResponse(offer);
   }
 
   @Override
-  @Transactional
   public TripDetailResponse updateTripStatus(UUID tripId, UUID actorId, TripStatus nextStatus) {
     if (nextStatus == TripStatus.ACCEPTED) {
       throw BaseDomainException.badRequest(
@@ -202,6 +260,29 @@ public class TripServiceImpl implements TripService {
           "Direct transition to ACCEPTED is disallowed; must use respondOffer");
     }
 
+    Trip trip = getSelf().updateTripStatusInDb(tripId, actorId, nextStatus);
+
+    if (nextStatus == TripStatus.COMPLETED || nextStatus == TripStatus.CANCELLED) {
+      if (trip.getDriverId() != null) {
+        try {
+          driverClient.updateDriverAvailability(
+              trip.getDriverId(), "DRIVER", DriverAvailabilityStatus.AVAILABLE);
+        } catch (Exception e) {
+          log.warn(
+              "Failed to notify driver-service to release driver {} on {}: {}",
+              trip.getDriverId(),
+              nextStatus,
+              e.getMessage());
+        }
+      }
+    }
+
+    return toResponse(trip);
+  }
+
+  @Override
+  @Transactional
+  public Trip updateTripStatusInDb(UUID tripId, UUID actorId, TripStatus nextStatus) {
     Trip trip =
         tripRepository
             .findById(tripId)
@@ -231,55 +312,19 @@ public class TripServiceImpl implements TripService {
     } else if (nextStatus == TripStatus.COMPLETED) {
       trip.setCompletedAt(now);
 
-      // Session 10: Trigger Event-Driven messaging via Kafka
-      TripCompletedEvent event =
-          TripCompletedEvent.builder()
-              .tripId(trip.getId())
-              .tripCode(trip.getTripCode())
-              .customerId(trip.getCustomerId())
-              .driverId(trip.getDriverId())
-              .serviceType(trip.getServiceType())
-              .finalFare(trip.getFinalFare() != null ? trip.getFinalFare() : BigDecimal.ZERO)
-              .currency(trip.getCurrency())
-              .paymentMethod(trip.getPaymentMethod())
-              .completedAt(now)
-              .build();
-
-      eventProducer.publishTripCompleted(event, UUID.randomUUID().toString());
-
-      if (trip.getDriverId() != null) {
-        try {
-          driverClient.updateDriverAvailability(
-              trip.getDriverId(), DriverAvailabilityStatus.AVAILABLE);
-        } catch (Exception e) {
-          log.warn(
-              "Failed to notify driver-service to release driver {} on completion: {}",
-              trip.getDriverId(),
-              e.getMessage());
-        }
-      }
+      // Publish Spring internal event; listener will publish Kafka event AFTER_COMMIT
+      applicationEventPublisher.publishEvent(new TripCompletedInternalEvent(trip));
     } else if (nextStatus == TripStatus.CANCELLED) {
       trip.setCancelledAt(now);
       trip.setCancelledBy(actorId);
       if (trip.getCancellationReason() == null) {
         trip.setCancellationReason("Cancelled by " + actorId);
       }
-      if (trip.getDriverId() != null) {
-        try {
-          driverClient.updateDriverAvailability(
-              trip.getDriverId(), DriverAvailabilityStatus.AVAILABLE);
-        } catch (Exception e) {
-          log.warn(
-              "Failed to notify driver-service to release driver {}: {}",
-              trip.getDriverId(),
-              e.getMessage());
-        }
-      }
     }
 
     trip = tripRepository.save(trip);
     log.info("Trip ID {} transitioned to status {}", tripId, nextStatus);
-    return toResponse(trip);
+    return trip;
   }
 
   @Override

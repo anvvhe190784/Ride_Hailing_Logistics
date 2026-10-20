@@ -3,6 +3,7 @@ package com.ridehailing.logistics.iam.controller;
 import com.ridehailing.logistics.common.dto.ApiResponse;
 import com.ridehailing.logistics.common.security.SecurityConstants;
 import com.ridehailing.logistics.iam.dto.request.LoginRequest;
+import com.ridehailing.logistics.iam.dto.request.LogoutRequest;
 import com.ridehailing.logistics.iam.dto.request.RefreshTokenRequest;
 import com.ridehailing.logistics.iam.dto.request.RegisterRequest;
 import com.ridehailing.logistics.iam.dto.response.AuthResponse;
@@ -48,6 +49,15 @@ public class AuthController {
           String correlationId) {
     AuthResponse response = authService.refreshToken(request);
     return ResponseEntity.ok(ApiResponse.success(response, correlationId));
+  }
+
+  @PostMapping("/logout")
+  public ResponseEntity<ApiResponse<Void>> logout(
+      @Valid @RequestBody LogoutRequest request,
+      @RequestHeader(value = SecurityConstants.HEADER_CORRELATION_ID, required = false)
+          String correlationId) {
+    authService.logout(request);
+    return ResponseEntity.ok(ApiResponse.success(null, correlationId));
   }
 
   @GetMapping("/me")

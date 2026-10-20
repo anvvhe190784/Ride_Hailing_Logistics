@@ -18,4 +18,13 @@ public interface WalletRepository extends JpaRepository<Wallet, UUID> {
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("SELECT w FROM Wallet w WHERE w.driverId = :driverId")
   Optional<Wallet> findByDriverIdForUpdate(@Param("driverId") UUID driverId);
+
+  @org.springframework.data.jpa.repository.Modifying
+  @Query(
+      value =
+          "INSERT INTO billing.wallets (id, driver_id, balance, version, created_at, updated_at) "
+              + "VALUES (gen_random_uuid(), :driverId, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) "
+              + "ON CONFLICT (driver_id) DO NOTHING",
+      nativeQuery = true)
+  void insertWalletIfNotExists(@Param("driverId") UUID driverId);
 }

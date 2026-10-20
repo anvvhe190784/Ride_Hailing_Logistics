@@ -25,6 +25,8 @@ public interface TripRepository extends JpaRepository<Trip, UUID> {
 
   List<Trip> findByDriverIdOrderByCreatedAtDesc(UUID driverId);
 
+  List<Trip> findByStatusAndCreatedAtBefore(TripStatus status, Instant before);
+
   boolean existsByDriverIdAndStatusIn(UUID driverId, List<TripStatus> statuses);
 
   @Modifying(clearAutomatically = true)

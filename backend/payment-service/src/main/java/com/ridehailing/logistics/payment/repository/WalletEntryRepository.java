@@ -13,5 +13,7 @@ import org.springframework.stereotype.Repository;
 public interface WalletEntryRepository extends JpaRepository<WalletEntry, UUID> {
   List<WalletEntry> findByWalletIdOrderByCreatedAtDesc(UUID walletId);
 
+  Page<WalletEntry> findByWalletId(UUID walletId, Pageable pageable);
+
   Page<WalletEntry> findByWalletIdOrderByCreatedAtDesc(UUID walletId, Pageable pageable);
 }

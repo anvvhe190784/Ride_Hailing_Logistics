@@ -70,3 +70,4 @@ CREATE INDEX IF NOT EXISTS idx_driver_profiles_status ON driver.driver_profiles 
 CREATE INDEX IF NOT EXISTS idx_driver_profiles_available ON driver.driver_profiles (availability_status) WHERE review_status = 'APPROVED';
 CREATE INDEX IF NOT EXISTS idx_driver_vehicles_driver ON driver.vehicles (driver_id);
 CREATE INDEX IF NOT EXISTS idx_driver_documents_driver ON driver.driver_documents (driver_id);
+CREATE INDEX IF NOT EXISTS idx_driver_profiles_user_id ON driver.driver_profiles (user_id);

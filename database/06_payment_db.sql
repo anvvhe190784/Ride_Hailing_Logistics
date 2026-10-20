@@ -92,6 +92,7 @@ CREATE TABLE IF NOT EXISTS platform.idempotency_keys
 
 CREATE INDEX IF NOT EXISTS idx_wallets_driver ON billing.wallets (driver_id);
 CREATE INDEX IF NOT EXISTS idx_wallet_entries_wallet ON billing.wallet_entries (wallet_id);
+CREATE INDEX IF NOT EXISTS idx_wallet_entries_wallet_created ON billing.wallet_entries (wallet_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_wallet_entries_ref ON billing.wallet_entries (reference_id);
 CREATE INDEX IF NOT EXISTS idx_payments_trip ON billing.payments (trip_id);
 CREATE INDEX IF NOT EXISTS idx_payments_customer ON billing.payments (customer_id);

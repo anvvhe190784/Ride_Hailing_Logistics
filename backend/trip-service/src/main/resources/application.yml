@@ -1,9 +1,12 @@
 server:
   port: 8085
+  shutdown: graceful
 
 spring:
   application:
     name: trip-service
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
   config:
     # noinspection HttpUrlsUsage
     import: "optional:configserver:http://localhost:8888"
@@ -15,6 +18,12 @@ spring:
     username: postgres
     password: ${DB_PASSWORD:admin} # pragma: allowlist-secret
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 30
+      minimum-idle: 10
+      idle-timeout: 300000
+      max-lifetime: 1800000
+      connection-timeout: 5000
   jpa:
     open-in-view: false
     hibernate:
@@ -51,8 +60,24 @@ resilience4j:
         failure-rate-threshold: 50
         wait-duration-in-open-state: 10s
         permitted-number-of-calls-in-half-open-state: 3
+      locationService:
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 3000
+        readTimeout: 5000
+        loggerLevel: BASIC
 
 management:
+  endpoint:
+    health:
+      show-details: always
   endpoints:
     web:
       exposure:

@@ -112,5 +112,8 @@ CREATE TABLE IF NOT EXISTS platform.outbox_events
 CREATE INDEX IF NOT EXISTS idx_trips_customer ON trip.trips (customer_id);
 CREATE INDEX IF NOT EXISTS idx_trips_status ON trip.trips (status);
 CREATE INDEX IF NOT EXISTS idx_trips_driver_history ON trip.trips (driver_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_trips_quote_id ON trip.trips (quote_id);
 CREATE INDEX IF NOT EXISTS idx_driver_offers_trip ON trip.driver_offers (trip_id);
+CREATE INDEX IF NOT EXISTS idx_driver_offers_driver_status ON trip.driver_offers (driver_id, status);
+CREATE INDEX IF NOT EXISTS idx_trip_stops_trip_id ON trip.trip_stops (trip_id);
 CREATE INDEX IF NOT EXISTS idx_outbox_pending_created ON platform.outbox_events (created_at ASC) WHERE status = 'PENDING';

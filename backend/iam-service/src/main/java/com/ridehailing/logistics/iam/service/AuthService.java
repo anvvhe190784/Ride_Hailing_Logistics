@@ -1,6 +1,7 @@
 package com.ridehailing.logistics.iam.service;
 
 import com.ridehailing.logistics.iam.dto.request.LoginRequest;
+import com.ridehailing.logistics.iam.dto.request.LogoutRequest;
 import com.ridehailing.logistics.iam.dto.request.RefreshTokenRequest;
 import com.ridehailing.logistics.iam.dto.request.RegisterRequest;
 import com.ridehailing.logistics.iam.dto.response.AuthResponse;
@@ -13,6 +14,8 @@ public interface AuthService {
   AuthResponse login(LoginRequest request);
 
   AuthResponse refreshToken(RefreshTokenRequest request);
+
+  void logout(LogoutRequest request);
 
   UserResponse getUserProfile(UUID userId);
 }

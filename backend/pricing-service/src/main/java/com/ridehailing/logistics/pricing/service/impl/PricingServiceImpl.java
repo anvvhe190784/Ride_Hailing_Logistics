@@ -180,7 +180,11 @@ public class PricingServiceImpl implements PricingService {
         q.getTotalFare(),
         q.getCurrency(),
         q.getRuleVersion(),
-        q.getExpiresAt());
+        q.getExpiresAt(),
+        q.getPickupPoint() != null ? q.getPickupPoint().getY() : null,
+        q.getPickupPoint() != null ? q.getPickupPoint().getX() : null,
+        q.getDropoffPoint() != null ? q.getDropoffPoint().getY() : null,
+        q.getDropoffPoint() != null ? q.getDropoffPoint().getX() : null);
   }
 
   private double calculateHaversine(double lat1, double lon1, double lat2, double lon2) {

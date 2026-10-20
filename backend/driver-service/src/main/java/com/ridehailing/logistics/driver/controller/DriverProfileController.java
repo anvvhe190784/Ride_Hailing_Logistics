@@ -28,9 +28,11 @@ public class DriverProfileController {
   @PostMapping("/kyc")
   public ResponseEntity<ApiResponse<DriverProfileResponse>> submitKyc(
       @RequestHeader(SecurityConstants.HEADER_USER_ID) UUID driverId,
+      @RequestHeader(value = SecurityConstants.HEADER_USER_ROLE, defaultValue = "") String role,
       @Valid @RequestBody DriverKycRequest request,
       @RequestHeader(value = SecurityConstants.HEADER_CORRELATION_ID, required = false)
           String correlationId) {
+    validateDriverOrAdmin(role);
     DriverProfileResponse response = driverProfileService.submitKyc(driverId, request);
     return ResponseEntity.ok(ApiResponse.success(response, correlationId));
   }
@@ -38,9 +40,11 @@ public class DriverProfileController {
   @PutMapping("/availability")
   public ResponseEntity<ApiResponse<DriverProfileResponse>> updateAvailability(
       @RequestHeader(SecurityConstants.HEADER_USER_ID) UUID driverId,
+      @RequestHeader(value = SecurityConstants.HEADER_USER_ROLE, defaultValue = "") String role,
       @RequestParam DriverAvailabilityStatus status,
       @RequestHeader(value = SecurityConstants.HEADER_CORRELATION_ID, required = false)
           String correlationId) {
+    validateDriverOrAdmin(role);
     DriverProfileResponse response = driverProfileService.updateAvailability(driverId, status);
     return ResponseEntity.ok(ApiResponse.success(response, correlationId));
   }
@@ -98,9 +102,11 @@ public class DriverProfileController {
   @PostMapping("/vehicles")
   public ResponseEntity<ApiResponse<VehicleResponse>> registerVehicle(
       @RequestHeader(SecurityConstants.HEADER_USER_ID) UUID driverId,
+      @RequestHeader(value = SecurityConstants.HEADER_USER_ROLE, defaultValue = "") String role,
       @Valid @RequestBody VehicleCreateRequest request,
       @RequestHeader(value = SecurityConstants.HEADER_CORRELATION_ID, required = false)
           String correlationId) {
+    validateDriverOrAdmin(role);
     VehicleResponse response = driverProfileService.registerVehicle(driverId, request);
     return ResponseEntity.status(HttpStatus.CREATED)
         .body(ApiResponse.success(response, correlationId));
@@ -113,5 +119,13 @@ public class DriverProfileController {
           String correlationId) {
     List<VehicleResponse> response = driverProfileService.getVehicles(driverId);
     return ResponseEntity.ok(ApiResponse.success(response, correlationId));
+  }
+
+  private void validateDriverOrAdmin(String role) {
+    if (role == null
+        || (!"DRIVER".equalsIgnoreCase(role.trim()) && !"ADMIN".equalsIgnoreCase(role.trim()))) {
+      throw BaseDomainException.forbidden(
+          "FORBIDDEN_ACCESS", "Access denied: DRIVER or ADMIN role required");
+    }
   }
 }

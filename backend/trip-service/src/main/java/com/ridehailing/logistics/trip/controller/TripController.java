@@ -2,6 +2,7 @@ package com.ridehailing.logistics.trip.controller;
 
 import com.ridehailing.logistics.common.domain.enums.TripStatus;
 import com.ridehailing.logistics.common.dto.ApiResponse;
+import com.ridehailing.logistics.common.exception.BaseDomainException;
 import com.ridehailing.logistics.common.security.SecurityConstants;
 import com.ridehailing.logistics.trip.dto.CreateTripRequest;
 import com.ridehailing.logistics.trip.dto.DriverOfferResponse;
@@ -36,9 +37,22 @@ public class TripController {
   @GetMapping("/{tripId}")
   public ResponseEntity<ApiResponse<TripDetailResponse>> getTrip(
       @PathVariable UUID tripId,
+      @RequestHeader(SecurityConstants.HEADER_USER_ID) UUID currentUserId,
+      @RequestHeader(value = SecurityConstants.HEADER_USER_ROLE, defaultValue = "CUSTOMER")
+          String currentUserRole,
       @RequestHeader(value = SecurityConstants.HEADER_CORRELATION_ID, required = false)
           String correlationId) {
     TripDetailResponse response = tripService.getTrip(tripId);
+    boolean isParticipant =
+        currentUserId.equals(response.customerId())
+            || (response.driverId() != null && currentUserId.equals(response.driverId()));
+    boolean isAdmin = "ADMIN".equalsIgnoreCase(currentUserRole);
+
+    if (!isParticipant && !isAdmin) {
+      throw BaseDomainException.forbidden(
+          "FORBIDDEN_ACCESS", "You are not authorized to view this trip");
+    }
+
     return ResponseEntity.ok(ApiResponse.success(response, correlationId));
   }
 

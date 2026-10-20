@@ -54,3 +54,4 @@ ON CONFLICT (phone) DO NOTHING;
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON iam.refresh_tokens (user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON iam.audit_logs (user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON iam.audit_logs (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_users_role_status ON iam.users (role, status);
