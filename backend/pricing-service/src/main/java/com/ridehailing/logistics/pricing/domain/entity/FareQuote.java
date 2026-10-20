@@ -75,7 +75,7 @@ public class FareQuote {
 
   @Column(name = "is_used", nullable = false)
   @Builder.Default
-  private boolean isUsed = false;
+  private boolean used = false;
 
   @CreationTimestamp
   @Column(name = "created_at", nullable = false, updatable = false)

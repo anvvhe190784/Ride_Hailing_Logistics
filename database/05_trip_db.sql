@@ -4,6 +4,7 @@
 -- ============================================================================
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "postgis";
 CREATE SCHEMA IF NOT EXISTS trip;
 CREATE SCHEMA IF NOT EXISTS platform;
 
@@ -25,6 +26,7 @@ CREATE TABLE IF NOT EXISTS trip.trips
     recipient_name            VARCHAR(100),
     recipient_phone           VARCHAR(20),
     package_description       VARCHAR(255),
+    pickup_point              GEOMETRY(Point, 4326),
     final_fare                NUMERIC(12, 2),
     currency                  VARCHAR(3)               DEFAULT 'VND'             NOT NULL,
     payment_method            VARCHAR(32)              DEFAULT 'CASH'            NOT NULL,
@@ -110,6 +112,7 @@ CREATE TABLE IF NOT EXISTS platform.outbox_events
 );
 
 CREATE INDEX IF NOT EXISTS idx_trips_customer ON trip.trips (customer_id);
+CREATE INDEX IF NOT EXISTS idx_trips_pickup_point ON trip.trips USING GIST (pickup_point);
 CREATE INDEX IF NOT EXISTS idx_trips_status ON trip.trips (status);
 CREATE INDEX IF NOT EXISTS idx_trips_driver_history ON trip.trips (driver_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_trips_quote_id ON trip.trips (quote_id);

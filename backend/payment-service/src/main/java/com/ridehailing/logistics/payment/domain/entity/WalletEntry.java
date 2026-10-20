@@ -24,14 +24,17 @@ public class WalletEntry {
   @Column(name = "wallet_id", nullable = false)
   private UUID walletId;
 
+  @Column(name = "trip_id")
+  private UUID tripId;
+
   @Enumerated(EnumType.STRING)
   @Column(name = "entry_type", nullable = false, length = 32)
   private WalletEntryType entryType;
 
-  @Column(nullable = false, precision = 12, scale = 2)
+  @Column(nullable = false, precision = 15, scale = 2)
   private BigDecimal amount; // Positive = Credit, Negative = Debit
 
-  @Column(name = "balance_after", nullable = false, precision = 12, scale = 2)
+  @Column(name = "balance_after", nullable = false, precision = 15, scale = 2)
   private BigDecimal balanceAfter;
 
   @Column(name = "reference_type", nullable = false, length = 32)

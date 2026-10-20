@@ -19,7 +19,7 @@ public class PricingController {
 
   private final PricingService pricingService;
 
-  @PostMapping("/quote")
+  @PostMapping({"/quote", "/quotes"})
   public ResponseEntity<ApiResponse<FareQuoteResponse>> estimateFare(
       @RequestHeader(SecurityConstants.HEADER_USER_ID) UUID customerId,
       @Valid @RequestBody FareEstimateRequest request,
@@ -30,7 +30,7 @@ public class PricingController {
         .body(ApiResponse.success(response, correlationId));
   }
 
-  @GetMapping("/quote/{quoteId}")
+  @GetMapping({"/quote/{quoteId}", "/quotes/{quoteId}"})
   public ResponseEntity<ApiResponse<FareQuoteResponse>> getQuote(
       @PathVariable UUID quoteId,
       @RequestHeader(value = SecurityConstants.HEADER_CORRELATION_ID, required = false)

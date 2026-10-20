@@ -16,8 +16,8 @@ public record TelemetryRequest(
         @DecimalMin(value = "-180.0", message = "Longitude must be >= -180.0")
         @DecimalMax(value = "180.0", message = "Longitude must be <= 180.0")
         BigDecimal longitude,
-    BigDecimal accuracyMeters,
-    BigDecimal headingDegrees,
-    BigDecimal speedMps,
+    Double accuracyMeters,
+    Double headingDegrees,
+    Double speedMps,
     @NotNull(message = "Sequence number is required") Long sequenceNum,
     @NotNull(message = "Device timestamp is required") Instant deviceTimestamp) {}

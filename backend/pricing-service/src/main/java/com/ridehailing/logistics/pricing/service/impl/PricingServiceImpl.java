@@ -137,28 +137,40 @@ public class PricingServiceImpl implements PricingService {
   @Override
   @Transactional
   public FareQuoteResponse consumeQuote(UUID quoteId, UUID customerId) {
+    Instant now = Instant.now();
+    int updatedRows = fareQuoteRepository.consumeQuoteAtomically(quoteId, customerId, now);
+
+    if (updatedRows == 0) {
+      FareQuote existing =
+          fareQuoteRepository
+              .findById(quoteId)
+              .orElseThrow(
+                  () -> BaseDomainException.notFound("QUOTE_NOT_FOUND", "Fare quote not found"));
+
+      if (!existing.getCustomerId().equals(customerId)) {
+        throw BaseDomainException.forbidden(
+            "QUOTE_ACCESS_DENIED", "Quote does not belong to customer " + customerId);
+      }
+
+      if (existing.isUsed()) {
+        throw BaseDomainException.conflict(
+            "QUOTE_ALREADY_USED", "Fare quote has already been consumed");
+      }
+
+      if (existing.getExpiresAt().isBefore(now)) {
+        throw BaseDomainException.badRequest("QUOTE_EXPIRED", "Fare quote has expired");
+      }
+
+      throw BaseDomainException.conflict(
+          "QUOTE_ALREADY_USED", "Fare quote could not be consumed");
+    }
+
     FareQuote quote =
         fareQuoteRepository
             .findById(quoteId)
             .orElseThrow(
                 () -> BaseDomainException.notFound("QUOTE_NOT_FOUND", "Fare quote not found"));
 
-    if (!quote.getCustomerId().equals(customerId)) {
-      throw BaseDomainException.forbidden(
-          "QUOTE_ACCESS_DENIED", "Quote does not belong to customer " + customerId);
-    }
-
-    if (quote.isUsed()) {
-      throw BaseDomainException.conflict(
-          "QUOTE_ALREADY_USED", "Fare quote has already been consumed");
-    }
-
-    if (quote.getExpiresAt().isBefore(Instant.now())) {
-      throw BaseDomainException.badRequest("QUOTE_EXPIRED", "Fare quote has expired");
-    }
-
-    quote.setUsed(true);
-    fareQuoteRepository.save(quote);
     log.info("Fare quote {} successfully consumed for customer {}", quoteId, customerId);
 
     return toResponse(quote);

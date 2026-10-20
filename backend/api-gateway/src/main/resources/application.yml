@@ -59,7 +59,7 @@ spring:
         - id: pricing-service-route
           uri: lb://pricing-service
           predicates:
-            - Path=/api/v1/pricing/**,/api/v1/quotes/**
+            - Path=/api/v1/pricing/quotes,/api/v1/pricing/quotes/{quoteId},/api/v1/pricing/quote,/api/v1/pricing/quote/{quoteId}
 
         - id: trip-service-route
           uri: lb://trip-service

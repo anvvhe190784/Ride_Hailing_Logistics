@@ -33,14 +33,14 @@ public class DriverLatestLocation {
   @Column(nullable = false, precision = 10, scale = 7)
   private BigDecimal longitude;
 
-  @Column(name = "accuracy_meters", precision = 6, scale = 2)
-  private BigDecimal accuracyMeters;
+  @Column(name = "accuracy_meters")
+  private Double accuracyMeters;
 
-  @Column(name = "heading_degrees", precision = 5, scale = 2)
-  private BigDecimal headingDegrees;
+  @Column(name = "heading_degrees")
+  private Double headingDegrees;
 
-  @Column(name = "speed_mps", precision = 6, scale = 2)
-  private BigDecimal speedMps;
+  @Column(name = "speed_mps")
+  private Double speedMps;
 
   @Column(name = "is_suspicious_gps", nullable = false)
   @Builder.Default

@@ -5,7 +5,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
+import com.ridehailing.logistics.common.domain.enums.DriverAvailabilityStatus;
 import com.ridehailing.logistics.common.domain.enums.TripStatus;
+import com.ridehailing.logistics.trip.client.DriverClient;
 import com.ridehailing.logistics.trip.domain.entity.DriverOffer;
 import com.ridehailing.logistics.trip.domain.entity.Trip;
 import com.ridehailing.logistics.trip.domain.entity.TripStatusHistory;
@@ -32,6 +34,7 @@ class TripCleanupSchedulerTest {
   @Mock private TripRepository tripRepository;
   @Mock private DriverOfferRepository driverOfferRepository;
   @Mock private TripStatusHistoryRepository tripStatusHistoryRepository;
+  @Mock private DriverClient driverClient;
 
   @InjectMocks private TripCleanupScheduler scheduler;
 
@@ -112,5 +115,56 @@ class TripCleanupSchedulerTest {
     assertEquals("EXPIRED", pendingOffer.getStatus());
     assertEquals("REJECTED", rejectedOffer.getStatus());
     verify(driverOfferRepository, times(1)).saveAll(any());
+  }
+
+  @Test
+  @DisplayName("cleanDriverNoShowTrips does nothing when no stale accepted/picking up trips exist")
+  void shouldDoNothingWhenNoDriverNoShowTrips() {
+    when(tripRepository.findByStatusInAndAcceptedAtBefore(any(), any(Instant.class)))
+        .thenReturn(Collections.emptyList());
+
+    scheduler.cleanDriverNoShowTrips();
+
+    verify(tripRepository, never()).save(any(Trip.class));
+    verify(tripStatusHistoryRepository, never()).save(any(TripStatusHistory.class));
+    verify(driverClient, never()).updateDriverAvailability(any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("cleanDriverNoShowTrips cancels trips, records history, and resets driver availability")
+  void shouldCancelDriverNoShowTripsAndResetDriver() {
+    UUID driverId = UUID.randomUUID();
+    Trip acceptedTrip =
+        Trip.builder()
+            .id(tripId)
+            .tripCode("TRP-TEST02")
+            .status(TripStatus.ACCEPTED)
+            .driverId(driverId)
+            .customerId(UUID.randomUUID())
+            .acceptedAt(Instant.now().minus(35, ChronoUnit.MINUTES))
+            .build();
+
+    when(tripRepository.findByStatusInAndAcceptedAtBefore(any(), any(Instant.class)))
+        .thenReturn(List.of(acceptedTrip));
+
+    scheduler.cleanDriverNoShowTrips();
+
+    assertEquals(TripStatus.CANCELLED, acceptedTrip.getStatus());
+    assertEquals("DRIVER_NO_SHOW", acceptedTrip.getCancellationReason());
+    assertNotNull(acceptedTrip.getCancelledAt());
+    verify(tripRepository, times(1)).save(acceptedTrip);
+
+    ArgumentCaptor<TripStatusHistory> historyCaptor =
+        ArgumentCaptor.forClass(TripStatusHistory.class);
+    verify(tripStatusHistoryRepository, times(1)).save(historyCaptor.capture());
+    TripStatusHistory savedHistory = historyCaptor.getValue();
+    assertEquals(tripId, savedHistory.getTripId());
+    assertEquals("ACCEPTED", savedHistory.getFromStatus());
+    assertEquals("CANCELLED", savedHistory.getToStatus());
+    assertEquals("SYSTEM", savedHistory.getActorRole());
+    assertEquals("DRIVER_NO_SHOW", savedHistory.getReason());
+
+    verify(driverClient, times(1))
+        .updateDriverAvailability(driverId, "DRIVER", DriverAvailabilityStatus.AVAILABLE);
   }
 }

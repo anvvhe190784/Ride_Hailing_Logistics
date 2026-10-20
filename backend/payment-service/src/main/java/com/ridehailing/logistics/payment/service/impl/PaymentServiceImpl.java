@@ -84,6 +84,7 @@ public class PaymentServiceImpl implements PaymentService {
         WalletEntry entry =
             WalletEntry.builder()
                 .walletId(wallet.getId())
+                .tripId(tripId)
                 .entryType(WalletEntryType.COMMISSION_DEBIT)
                 .amount(commission) // Positive amount per DB CHECK (amount > 0)
                 .balanceAfter(newBalance)
@@ -115,6 +116,7 @@ public class PaymentServiceImpl implements PaymentService {
         WalletEntry entry =
             WalletEntry.builder()
                 .walletId(wallet.getId())
+                .tripId(tripId)
                 .entryType(WalletEntryType.TRIP_EARNING_CREDIT)
                 .amount(netEarning)
                 .balanceAfter(newBalance)

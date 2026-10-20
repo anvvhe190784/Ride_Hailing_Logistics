@@ -12,6 +12,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.type.SqlTypes;
+import org.locationtech.jts.geom.Point;
 
 @Entity
 @Table(name = "trips", schema = "trip")
@@ -111,8 +112,8 @@ public class Trip {
   @Column(name = "package_description")
   private String packageDescription;
 
-  @Transient
-  private org.locationtech.jts.geom.Point pickupPoint;
+  @Column(name = "pickup_point", columnDefinition = "geometry(Point,4326)")
+  private Point pickupPoint;
 
   @Version
   @Column(name = "version", nullable = false)
