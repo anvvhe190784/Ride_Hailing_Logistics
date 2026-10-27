@@ -6,7 +6,10 @@ import static org.mockito.Mockito.*;
 import com.ridehailing.logistics.common.domain.enums.UserRole;
 import com.ridehailing.logistics.common.security.JwtTokenProvider;
 import com.ridehailing.logistics.common.security.SecurityConstants;
+import com.ridehailing.logistics.common.security.TokenBlacklistService;
+import io.jsonwebtoken.Claims;
 import java.net.URI;
+import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,10 +29,12 @@ class JwtAuthenticationGatewayFilterTest {
 
   private JwtAuthenticationGatewayFilter filter;
   private JwtTokenProvider jwtTokenProvider;
+  private TokenBlacklistService tokenBlacklistService;
 
   @BeforeEach
   void setUp() {
-    filter = new JwtAuthenticationGatewayFilter(TEST_SECRET);
+    tokenBlacklistService = new TokenBlacklistService();
+    filter = new JwtAuthenticationGatewayFilter(TEST_SECRET, tokenBlacklistService);
     jwtTokenProvider = new JwtTokenProvider(TEST_SECRET);
   }
 
@@ -115,5 +120,44 @@ class JwtAuthenticationGatewayFilterTest {
     assertEquals(role.name(), downstreamHeaders.getFirst(SecurityConstants.HEADER_USER_ROLE));
     assertEquals(phone, downstreamHeaders.getFirst(SecurityConstants.HEADER_USER_PHONE));
     assertNotNull(downstreamHeaders.getFirst(SecurityConstants.HEADER_CORRELATION_ID));
+  }
+
+  @Test
+  void shouldReturnUnauthorizedWhenTokenIsBlacklisted() {
+    UUID userId = UUID.randomUUID();
+    String validToken = jwtTokenProvider.generateAccessToken(userId, "+84912345678", UserRole.CUSTOMER);
+    tokenBlacklistService.blacklistToken(validToken, Instant.now().plusSeconds(600));
+
+    MockServerHttpRequest request =
+        MockServerHttpRequest.get("/api/v1/drivers/me")
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + validToken)
+            .build();
+    MockServerWebExchange exchange = MockServerWebExchange.from(request);
+    GatewayFilterChain chain = mock(GatewayFilterChain.class);
+
+    filter.filter(exchange, chain).block();
+
+    assertEquals(HttpStatus.UNAUTHORIZED, exchange.getResponse().getStatusCode());
+    verify(chain, never()).filter(any());
+  }
+
+  @Test
+  void shouldReturnUnauthorizedWhenJtiIsBlacklisted() {
+    UUID userId = UUID.randomUUID();
+    String validToken = jwtTokenProvider.generateAccessToken(userId, "+84912345678", UserRole.CUSTOMER);
+    Claims claims = jwtTokenProvider.parseClaims(validToken);
+    tokenBlacklistService.blacklistToken(claims.getId(), Instant.now().plusSeconds(600));
+
+    MockServerHttpRequest request =
+        MockServerHttpRequest.get("/api/v1/drivers/me")
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + validToken)
+            .build();
+    MockServerWebExchange exchange = MockServerWebExchange.from(request);
+    GatewayFilterChain chain = mock(GatewayFilterChain.class);
+
+    filter.filter(exchange, chain).block();
+
+    assertEquals(HttpStatus.UNAUTHORIZED, exchange.getResponse().getStatusCode());
+    verify(chain, never()).filter(any());
   }
 }

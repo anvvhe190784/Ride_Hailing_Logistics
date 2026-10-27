@@ -58,7 +58,8 @@ CREATE TABLE IF NOT EXISTS location.driver_telemetry_history_default
     PARTITION OF location.driver_telemetry_history DEFAULT;
 
 -- Chỉ mục không gian GiST và chỉ mục hỗ trợ truy vấn
-CREATE INDEX IF NOT EXISTS idx_driver_locations_geog ON location.driver_latest_locations USING GIST ((location::geography));
-CREATE INDEX IF NOT EXISTS idx_driver_locations_available ON location.driver_latest_locations (is_available) WHERE is_available = TRUE;
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_driver_locations_geog ON location.driver_latest_locations USING GIST ((location::geography));
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_driver_locations_available ON location.driver_latest_locations (is_available) WHERE is_available = TRUE;
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_driver_locations_available_updated ON location.driver_latest_locations (is_available, updated_at);
 CREATE INDEX IF NOT EXISTS idx_telemetry_driver_recorded ON location.driver_telemetry_history (driver_id, recorded_at DESC);
 CREATE INDEX IF NOT EXISTS idx_telemetry_geog ON location.driver_telemetry_history USING GIST ((location::geography));

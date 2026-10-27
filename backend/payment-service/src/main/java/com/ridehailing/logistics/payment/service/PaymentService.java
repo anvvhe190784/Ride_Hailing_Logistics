@@ -1,12 +1,11 @@
 package com.ridehailing.logistics.payment.service;
 
 import com.ridehailing.logistics.common.domain.enums.PaymentMethod;
-import com.ridehailing.logistics.payment.domain.entity.Wallet;
-import com.ridehailing.logistics.payment.domain.entity.WalletEntry;
+import com.ridehailing.logistics.payment.dto.response.WalletEntryResponse;
+import com.ridehailing.logistics.payment.dto.response.WalletResponse;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
-
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -19,9 +18,9 @@ public interface PaymentService {
       PaymentMethod method,
       String idempotencyKey);
 
-  Wallet getWalletByDriver(UUID driverId);
+  WalletResponse getWalletByDriver(UUID driverId);
 
-  List<WalletEntry> getWalletStatement(UUID driverId);
+  List<WalletEntryResponse> getWalletStatement(UUID driverId);
 
-  Page<WalletEntry> getWalletStatement(UUID driverId, Pageable pageable);
+  Page<WalletEntryResponse> getWalletStatement(UUID driverId, Pageable pageable);
 }

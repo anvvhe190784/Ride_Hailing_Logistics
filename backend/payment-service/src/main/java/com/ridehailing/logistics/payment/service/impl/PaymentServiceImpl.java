@@ -7,6 +7,8 @@ import com.ridehailing.logistics.common.exception.BaseDomainException;
 import com.ridehailing.logistics.payment.domain.entity.Payment;
 import com.ridehailing.logistics.payment.domain.entity.Wallet;
 import com.ridehailing.logistics.payment.domain.entity.WalletEntry;
+import com.ridehailing.logistics.payment.dto.response.WalletEntryResponse;
+import com.ridehailing.logistics.payment.dto.response.WalletResponse;
 import com.ridehailing.logistics.payment.repository.PaymentRepository;
 import com.ridehailing.logistics.payment.repository.WalletEntryRepository;
 import com.ridehailing.logistics.payment.repository.WalletRepository;
@@ -19,7 +21,6 @@ import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -146,22 +147,26 @@ public class PaymentServiceImpl implements PaymentService {
 
   @Override
   @Transactional(readOnly = true)
-  public Wallet getWalletByDriver(UUID driverId) {
-    return findWalletOrThrow(driverId);
+  public WalletResponse getWalletByDriver(UUID driverId) {
+    return WalletResponse.fromEntity(findWalletOrThrow(driverId));
   }
 
   @Override
   @Transactional(readOnly = true)
-  public List<WalletEntry> getWalletStatement(UUID driverId) {
+  public List<WalletEntryResponse> getWalletStatement(UUID driverId) {
     Wallet wallet = findWalletOrThrow(driverId);
-    return walletEntryRepository.findByWalletIdOrderByCreatedAtDesc(wallet.getId());
+    return walletEntryRepository.findByWalletIdOrderByCreatedAtDesc(wallet.getId()).stream()
+        .map(WalletEntryResponse::fromEntity)
+        .toList();
   }
 
   @Override
   @Transactional(readOnly = true)
-  public Page<WalletEntry> getWalletStatement(UUID driverId, Pageable pageable) {
+  public Page<WalletEntryResponse> getWalletStatement(UUID driverId, Pageable pageable) {
     Wallet wallet = findWalletOrThrow(driverId);
-    return walletEntryRepository.findByWalletIdOrderByCreatedAtDesc(wallet.getId(), pageable);
+    return walletEntryRepository
+        .findByWalletIdOrderByCreatedAtDesc(wallet.getId(), pageable)
+        .map(WalletEntryResponse::fromEntity);
   }
 
   public Wallet getOrCreateWallet(UUID driverId) {

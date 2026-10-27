@@ -26,10 +26,30 @@ public class TripController {
   @PostMapping
   public ResponseEntity<ApiResponse<TripDetailResponse>> createTrip(
       @RequestHeader(SecurityConstants.HEADER_USER_ID) UUID customerId,
+      @RequestHeader(value = SecurityConstants.HEADER_USER_ROLE, required = false) String userRole,
+      @RequestHeader(value = "Idempotency-Key", required = false) String headerIdempotencyKey,
       @Valid @RequestBody CreateTripRequest request,
       @RequestHeader(value = SecurityConstants.HEADER_CORRELATION_ID, required = false)
           String correlationId) {
-    TripDetailResponse response = tripService.createTrip(customerId, request);
+    if (userRole != null
+        && !"CUSTOMER".equalsIgnoreCase(userRole)
+        && !"ADMIN".equalsIgnoreCase(userRole)) {
+      throw BaseDomainException.forbidden("FORBIDDEN_ROLE", "Only customers can create trips");
+    }
+
+    String effectiveIdempotencyKey =
+        (headerIdempotencyKey != null && !headerIdempotencyKey.isBlank())
+            ? headerIdempotencyKey
+            : request.idempotencyKey();
+
+    if (effectiveIdempotencyKey == null || effectiveIdempotencyKey.isBlank()) {
+      throw BaseDomainException.badRequest("VALIDATION_ERROR", "Idempotency key is required");
+    }
+
+    CreateTripRequest effectiveRequest =
+        new CreateTripRequest(request.quoteId(), effectiveIdempotencyKey, request.paymentMethod());
+
+    TripDetailResponse response = tripService.createTrip(customerId, effectiveRequest);
     return ResponseEntity.status(HttpStatus.CREATED)
         .body(ApiResponse.success(response, correlationId));
   }
@@ -61,9 +81,11 @@ public class TripController {
       @PathVariable UUID tripId,
       @RequestParam TripStatus nextStatus,
       @RequestHeader(SecurityConstants.HEADER_USER_ID) UUID actorId,
+      @RequestHeader(value = SecurityConstants.HEADER_USER_ROLE, required = false) String actorRole,
       @RequestHeader(value = SecurityConstants.HEADER_CORRELATION_ID, required = false)
           String correlationId) {
-    TripDetailResponse response = tripService.updateTripStatus(tripId, actorId, nextStatus);
+    TripDetailResponse response =
+        tripService.updateTripStatus(tripId, actorId, actorRole, nextStatus);
     return ResponseEntity.ok(ApiResponse.success(response, correlationId));
   }
 

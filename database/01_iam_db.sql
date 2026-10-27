@@ -51,7 +51,7 @@ VALUES ('00000000-0000-0000-0000-000000000001', '0901234567', 'admin@ridehailing
         '$2a$12$e8YkR/q.zN.XQePZ3Fp4q.L0s6kO8R7aU5rP9mJ7mP5qQ4yW8z5W2', 'System Administrator', 'ADMIN', 'ACTIVE')
 ON CONFLICT (phone) DO NOTHING;
 
-CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON iam.refresh_tokens (user_id);
-CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON iam.audit_logs (user_id);
-CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON iam.audit_logs (created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_users_role_status ON iam.users (role, status);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_refresh_tokens_user ON iam.refresh_tokens (user_id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_audit_logs_user ON iam.audit_logs (user_id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_audit_logs_created ON iam.audit_logs (created_at DESC);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_users_role_status ON iam.users (role, status);

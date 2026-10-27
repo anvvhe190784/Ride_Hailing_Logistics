@@ -2,6 +2,7 @@ package com.ridehailing.logistics.pricing.controller;
 
 import com.ridehailing.logistics.common.dto.ApiResponse;
 import com.ridehailing.logistics.common.dto.FareQuoteResponse;
+import com.ridehailing.logistics.common.exception.BaseDomainException;
 import com.ridehailing.logistics.common.security.SecurityConstants;
 import com.ridehailing.logistics.pricing.dto.FareEstimateRequest;
 import com.ridehailing.logistics.pricing.service.PricingService;
@@ -23,9 +24,10 @@ public class PricingController {
   public ResponseEntity<ApiResponse<FareQuoteResponse>> estimateFare(
       @RequestHeader(SecurityConstants.HEADER_USER_ID) UUID customerId,
       @Valid @RequestBody FareEstimateRequest request,
+      @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
       @RequestHeader(value = SecurityConstants.HEADER_CORRELATION_ID, required = false)
           String correlationId) {
-    FareQuoteResponse response = pricingService.createQuote(customerId, request);
+    FareQuoteResponse response = pricingService.createQuote(customerId, request, idempotencyKey);
     return ResponseEntity.status(HttpStatus.CREATED)
         .body(ApiResponse.success(response, correlationId));
   }
@@ -33,9 +35,11 @@ public class PricingController {
   @GetMapping({"/quote/{quoteId}", "/quotes/{quoteId}"})
   public ResponseEntity<ApiResponse<FareQuoteResponse>> getQuote(
       @PathVariable UUID quoteId,
+      @RequestHeader(value = SecurityConstants.HEADER_USER_ID, required = false) UUID customerId,
+      @RequestHeader(value = SecurityConstants.HEADER_USER_ROLE, required = false) String userRole,
       @RequestHeader(value = SecurityConstants.HEADER_CORRELATION_ID, required = false)
           String correlationId) {
-    FareQuoteResponse response = pricingService.getQuote(quoteId);
+    FareQuoteResponse response = pricingService.getQuote(quoteId, customerId, userRole);
     return ResponseEntity.ok(ApiResponse.success(response, correlationId));
   }
 
@@ -43,8 +47,13 @@ public class PricingController {
   public ResponseEntity<ApiResponse<FareQuoteResponse>> consumeQuote(
       @PathVariable UUID quoteId,
       @RequestParam UUID customerId,
+      @RequestHeader(value = SecurityConstants.HEADER_USER_ID, required = false)
+          UUID headerCustomerId,
       @RequestHeader(value = SecurityConstants.HEADER_CORRELATION_ID, required = false)
           String correlationId) {
+    if (headerCustomerId != null && !headerCustomerId.equals(customerId)) {
+      throw BaseDomainException.forbidden("FORBIDDEN_ACCESS", "Customer ID mismatch");
+    }
     FareQuoteResponse response = pricingService.consumeQuote(quoteId, customerId);
     return ResponseEntity.ok(ApiResponse.success(response, correlationId));
   }

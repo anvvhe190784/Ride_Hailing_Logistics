@@ -16,7 +16,9 @@ import com.ridehailing.logistics.driver.repository.VehicleRepository;
 import com.ridehailing.logistics.driver.service.DriverProfileService;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -29,6 +31,15 @@ public class DriverProfileServiceImpl implements DriverProfileService {
 
   private static final String ERR_DRIVER_NOT_FOUND = "DRIVER_NOT_FOUND";
   private static final String MSG_DRIVER_NOT_FOUND = "Driver profile not found";
+  private static final long PROFILE_CACHE_TTL_MS = 60_000L;
+
+  private record CachedProfile(DriverProfileResponse response, long expireAtMillis) {
+    boolean isExpired() {
+      return System.currentTimeMillis() > expireAtMillis;
+    }
+  }
+
+  private final Map<UUID, CachedProfile> profileCache = new ConcurrentHashMap<>();
 
   private final DriverProfileRepository driverProfileRepository;
   private final VehicleRepository vehicleRepository;
@@ -40,14 +51,16 @@ public class DriverProfileServiceImpl implements DriverProfileService {
     DriverProfile profile =
         driverProfileRepository
             .findById(driverId)
-            .orElse(DriverProfile.builder().driverId(driverId).build());
+            .orElse(DriverProfile.builder().driverId(driverId).userId(driverId).build());
 
+    profile.setUserId(driverId);
     profile.setIdCardNumber(request.idCardNumber());
     profile.setDateOfBirth(request.dateOfBirth());
     profile.setAddress(request.address());
     profile.setReviewStatus(DriverReviewStatus.PENDING_REVIEW);
 
     profile = driverProfileRepository.save(profile);
+    profileCache.remove(driverId);
     log.info("Driver ID {} submitted KYC, status set to PENDING_REVIEW", driverId);
     return driverMapper.toResponse(profile);
   }
@@ -67,6 +80,7 @@ public class DriverProfileServiceImpl implements DriverProfileService {
     profile.setStatusReason("Verified successfully by reviewer");
 
     profile = driverProfileRepository.save(profile);
+    profileCache.remove(driverId);
     log.info("Driver ID {} approved by Reviewer ID {}", driverId, reviewerId);
     return driverMapper.toResponse(profile);
   }
@@ -97,6 +111,7 @@ public class DriverProfileServiceImpl implements DriverProfileService {
 
     profile.setAvailabilityStatus(status);
     profile = driverProfileRepository.save(profile);
+    profileCache.remove(driverId);
     log.info("Driver ID {} updated availability to {}", driverId, status);
     return driverMapper.toResponse(profile);
   }
@@ -104,12 +119,19 @@ public class DriverProfileServiceImpl implements DriverProfileService {
   @Override
   @Transactional(readOnly = true)
   public DriverProfileResponse getProfile(UUID driverId) {
+    CachedProfile cached = profileCache.get(driverId);
+    if (cached != null && !cached.isExpired()) {
+      return cached.response();
+    }
     DriverProfile profile =
         driverProfileRepository
             .findById(driverId)
             .orElseThrow(
                 () -> BaseDomainException.notFound(ERR_DRIVER_NOT_FOUND, MSG_DRIVER_NOT_FOUND));
-    return driverMapper.toResponse(profile);
+    DriverProfileResponse response = driverMapper.toResponse(profile);
+    profileCache.put(
+        driverId, new CachedProfile(response, System.currentTimeMillis() + PROFILE_CACHE_TTL_MS));
+    return response;
   }
 
   @Override

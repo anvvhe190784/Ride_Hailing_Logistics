@@ -33,4 +33,8 @@ public class ApiResponse<T> {
         .correlationId(correlationId)
         .build();
   }
+
+  public boolean isSuccess() {
+    return "SUCCESS".equalsIgnoreCase(this.code);
+  }
 }

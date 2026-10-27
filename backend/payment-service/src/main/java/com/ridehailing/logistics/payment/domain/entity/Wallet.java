@@ -28,7 +28,7 @@ public class Wallet {
   @Builder.Default
   private String currency = "VND";
 
-  @Column(nullable = false, precision = 12, scale = 2)
+  @Column(nullable = false, precision = 15, scale = 2)
   @Builder.Default
   private BigDecimal balance = BigDecimal.ZERO;
 

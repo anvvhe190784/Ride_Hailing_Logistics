@@ -61,6 +61,15 @@ VALUES ('11111111-1111-1111-1111-111111111101', 'RIDE_MOTORBIKE', 'HAN', 12500.0
        ('11111111-1111-1111-1111-111111111108', 'DELIVERY', 'SGN', 15000.00, 5000.00, 400.00, 15000.00, 1, CURRENT_TIMESTAMP, TRUE)
 ON CONFLICT (service_type, region_code, version) DO NOTHING;
 
-CREATE INDEX IF NOT EXISTS idx_pricing_rules_lookup ON pricing.pricing_rules (service_type, region_code, is_active);
-CREATE INDEX IF NOT EXISTS idx_fare_quotes_active ON pricing.fare_quotes (customer_id, expires_at) WHERE is_used = FALSE;
-CREATE INDEX IF NOT EXISTS idx_fare_quotes_expires ON pricing.fare_quotes (expires_at);
+-- ShedLock table for distributed scheduled tasks
+CREATE TABLE IF NOT EXISTS pricing.shedlock
+(
+    name       VARCHAR(64)              NOT NULL PRIMARY KEY,
+    lock_until TIMESTAMP WITH TIME ZONE NOT NULL,
+    locked_at  TIMESTAMP WITH TIME ZONE NOT NULL,
+    locked_by  VARCHAR(255)             NOT NULL
+);
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_pricing_rules_lookup ON pricing.pricing_rules (service_type, region_code, is_active);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_fare_quotes_active ON pricing.fare_quotes (customer_id, expires_at) WHERE is_used = FALSE;
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_fare_quotes_expires ON pricing.fare_quotes (expires_at);

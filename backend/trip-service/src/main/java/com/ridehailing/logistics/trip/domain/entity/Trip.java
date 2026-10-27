@@ -85,8 +85,19 @@ public class Trip {
   @Column(name = "created_at", nullable = false, updatable = false)
   private Instant createdAt;
 
+  @CreationTimestamp
+  @Column(name = "requested_at", nullable = false, updatable = false)
+  @Builder.Default
+  private Instant requestedAt = Instant.now();
+
   @Column(name = "accepted_at")
   private Instant acceptedAt;
+
+  @Column(name = "arrived_at")
+  private Instant arrivedAt;
+
+  @Column(name = "in_trip_at")
+  private Instant inTripAt;
 
   @Column(name = "started_at")
   private Instant startedAt;

@@ -24,7 +24,7 @@ public class LocationController {
 
   private final LocationService locationService;
 
-  @PostMapping("/telemetry")
+  @PostMapping({"/telemetry", "/update"})
   public ResponseEntity<ApiResponse<Void>> submitTelemetry(
       @RequestHeader(SecurityConstants.HEADER_USER_ID) UUID driverId,
       @RequestHeader(value = SecurityConstants.HEADER_USER_ROLE, defaultValue = "") String role,
@@ -39,7 +39,7 @@ public class LocationController {
     return ResponseEntity.ok(ApiResponse.success(null, correlationId));
   }
 
-  @GetMapping("/nearby-drivers")
+  @GetMapping({"/nearby-drivers", "/nearby"})
   public ResponseEntity<ApiResponse<List<NearbyDriverResponse>>> getNearbyDrivers(
       @RequestParam double latitude,
       @RequestParam double longitude,

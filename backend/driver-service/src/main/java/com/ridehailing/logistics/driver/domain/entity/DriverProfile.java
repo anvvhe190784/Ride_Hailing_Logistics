@@ -3,6 +3,7 @@ package com.ridehailing.logistics.driver.domain.entity;
 import com.ridehailing.logistics.common.domain.enums.DriverAvailabilityStatus;
 import com.ridehailing.logistics.common.domain.enums.DriverReviewStatus;
 import jakarta.persistence.*;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
@@ -23,13 +24,16 @@ public class DriverProfile {
   @Column(name = "driver_id")
   private UUID driverId;
 
-  @Column(name = "id_card_number", unique = true, length = 50)
+  @Column(name = "user_id")
+  private UUID userId;
+
+  @Column(name = "id_card_number", nullable = false, unique = true, length = 50)
   private String idCardNumber;
 
-  @Column(name = "date_of_birth")
+  @Column(name = "date_of_birth", nullable = false)
   private LocalDate dateOfBirth;
 
-  @Column(columnDefinition = "TEXT")
+  @Column(name = "address", nullable = false, length = 255)
   private String address;
 
   @Enumerated(EnumType.STRING)
@@ -37,7 +41,7 @@ public class DriverProfile {
   @Builder.Default
   private DriverReviewStatus reviewStatus = DriverReviewStatus.DRAFT;
 
-  @Column(name = "status_reason", columnDefinition = "TEXT")
+  @Column(name = "status_reason", length = 255)
   private String statusReason;
 
   @Column(name = "reviewer_id")
@@ -50,6 +54,18 @@ public class DriverProfile {
   @Column(name = "availability_status", nullable = false, length = 32)
   @Builder.Default
   private DriverAvailabilityStatus availabilityStatus = DriverAvailabilityStatus.OFFLINE;
+
+  @Column(name = "rating", nullable = false, precision = 3, scale = 2)
+  @Builder.Default
+  private BigDecimal rating = new BigDecimal("5.00");
+
+  @Column(name = "total_trips", nullable = false)
+  @Builder.Default
+  private Integer totalTrips = 0;
+
+  @Version
+  @Builder.Default
+  private Long version = 0L;
 
   @CreationTimestamp
   @Column(name = "created_at", nullable = false, updatable = false)

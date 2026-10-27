@@ -1,16 +1,20 @@
 server:
   port: 8888
+  shutdown: graceful
 
 spring:
   application:
     name: config-service
-  profiles:
-    active: native
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
   cloud:
     config:
       server:
-        native:
-          search-locations: classpath:/config,classpath:/
+        git:
+          uri: https://github.com/anvvhe190784/Ride_Hailing_Config_Repo
+          default-label: main
+          clone-on-start: true
+          timeout: 5
   threads:
     virtual:
       enabled: true

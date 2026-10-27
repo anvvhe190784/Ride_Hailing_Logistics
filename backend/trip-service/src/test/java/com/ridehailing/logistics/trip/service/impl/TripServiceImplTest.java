@@ -17,6 +17,7 @@ import com.ridehailing.logistics.trip.client.DriverClient;
 import com.ridehailing.logistics.trip.client.LocationClient;
 import com.ridehailing.logistics.trip.client.PricingClient;
 import com.ridehailing.logistics.trip.domain.entity.DriverOffer;
+import com.ridehailing.logistics.trip.domain.entity.OutboxEvent;
 import com.ridehailing.logistics.trip.domain.entity.Trip;
 import com.ridehailing.logistics.trip.dto.CreateTripRequest;
 import com.ridehailing.logistics.trip.dto.NearbyDriverResponse;
@@ -24,6 +25,7 @@ import com.ridehailing.logistics.trip.dto.TripDetailResponse;
 import com.ridehailing.logistics.trip.event.TripCompletedInternalEvent;
 import com.ridehailing.logistics.trip.event.TripEventProducer;
 import com.ridehailing.logistics.trip.repository.DriverOfferRepository;
+import com.ridehailing.logistics.trip.repository.OutboxEventRepository;
 import com.ridehailing.logistics.trip.repository.TripRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -51,8 +53,9 @@ class TripServiceImplTest {
   @Mock private LocationClient locationClient;
   @Mock private DriverClient driverClient;
   @Mock private TripEventProducer eventProducer;
+  @Mock private OutboxEventRepository outboxEventRepository;
   @Mock private ApplicationEventPublisher applicationEventPublisher;
-  @Spy private ObjectMapper objectMapper = new ObjectMapper();
+  @Spy private ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
   @InjectMocks private TripServiceImpl tripService;
 
@@ -190,9 +193,93 @@ class TripServiceImplTest {
     assertNotNull(response);
     assertEquals(TripStatus.COMPLETED, response.status());
 
+    // Verify Transactional Outbox Event was recorded
+    verify(outboxEventRepository, times(1)).save(any(OutboxEvent.class));
     // Verify ApplicationEventPublisher published TripCompletedInternalEvent
     verify(applicationEventPublisher, times(1)).publishEvent(any(TripCompletedInternalEvent.class));
     // Verify driver availability updated to AVAILABLE outside tx
     verify(driverClient, times(1)).updateDriverAvailability(driverId, "DRIVER", DriverAvailabilityStatus.AVAILABLE);
+  }
+
+  @Test
+  @DisplayName("ADMIN emergency cancellation should succeed and expire pending offers for MATCHING trip")
+  void shouldAllowAdminEmergencyCancellationAndExpireOffers() {
+    UUID tripId = UUID.randomUUID();
+    UUID adminId = UUID.randomUUID();
+    Trip trip =
+        Trip.builder()
+            .id(tripId)
+            .tripCode("TRP-MATCHING-1")
+            .customerId(customerId)
+            .driverId(null)
+            .status(TripStatus.MATCHING)
+            .serviceType(ServiceType.RIDE)
+            .build();
+
+    when(tripRepository.findById(tripId)).thenReturn(Optional.of(trip));
+    when(tripRepository.save(any(Trip.class))).thenAnswer(inv -> inv.getArgument(0));
+
+    TripDetailResponse response =
+        tripService.updateTripStatus(tripId, adminId, "ADMIN", TripStatus.CANCELLED);
+
+    assertNotNull(response);
+    assertEquals(TripStatus.CANCELLED, response.status());
+    assertEquals(TripStatus.CANCELLED, trip.getStatus());
+    assertNotNull(trip.getCancelledAt());
+    verify(driverOfferRepository, times(1))
+        .expirePendingOffersByTripIds(eq(List.of(tripId)), any(Instant.class));
+  }
+
+  @Test
+  @DisplayName("Transition to ARRIVED should set arrivedAt")
+  void shouldSetArrivedAtOnArrivedStatus() {
+    UUID tripId = UUID.randomUUID();
+    UUID driverId = UUID.randomUUID();
+    Trip trip =
+        Trip.builder()
+            .id(tripId)
+            .tripCode("TRP-ARRIVED-1")
+            .customerId(customerId)
+            .driverId(driverId)
+            .status(TripStatus.PICKING_UP)
+            .serviceType(ServiceType.RIDE)
+            .build();
+
+    when(tripRepository.findById(tripId)).thenReturn(Optional.of(trip));
+    when(tripRepository.save(any(Trip.class))).thenAnswer(inv -> inv.getArgument(0));
+
+    TripDetailResponse response =
+        tripService.updateTripStatus(tripId, driverId, "DRIVER", TripStatus.ARRIVED);
+
+    assertNotNull(response);
+    assertEquals(TripStatus.ARRIVED, response.status());
+    assertNotNull(trip.getArrivedAt());
+  }
+
+  @Test
+  @DisplayName("Transition to IN_TRIP should set inTripAt and startedAt")
+  void shouldSetInTripAtAndStartedAtOnInTripStatus() {
+    UUID tripId = UUID.randomUUID();
+    UUID driverId = UUID.randomUUID();
+    Trip trip =
+        Trip.builder()
+            .id(tripId)
+            .tripCode("TRP-INTRIP-1")
+            .customerId(customerId)
+            .driverId(driverId)
+            .status(TripStatus.ARRIVED)
+            .serviceType(ServiceType.RIDE)
+            .build();
+
+    when(tripRepository.findById(tripId)).thenReturn(Optional.of(trip));
+    when(tripRepository.save(any(Trip.class))).thenAnswer(inv -> inv.getArgument(0));
+
+    TripDetailResponse response =
+        tripService.updateTripStatus(tripId, driverId, "DRIVER", TripStatus.IN_TRIP);
+
+    assertNotNull(response);
+    assertEquals(TripStatus.IN_TRIP, response.status());
+    assertNotNull(trip.getInTripAt());
+    assertNotNull(trip.getStartedAt());
   }
 }

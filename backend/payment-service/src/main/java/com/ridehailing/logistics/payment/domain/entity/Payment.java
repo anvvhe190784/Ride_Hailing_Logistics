@@ -29,7 +29,7 @@ public class Payment {
   @Column(name = "customer_id", nullable = false)
   private UUID customerId;
 
-  @Column(nullable = false, precision = 12, scale = 2)
+  @Column(nullable = false, precision = 15, scale = 2)
   private BigDecimal amount;
 
   @Column(nullable = false, length = 3)
@@ -51,7 +51,7 @@ public class Payment {
   @Column(name = "idempotency_key", nullable = false, unique = true, length = 128)
   private String idempotencyKey;
 
-  @Column(name = "error_message", columnDefinition = "TEXT")
+  @Column(name = "error_message", length = 255)
   private String errorMessage;
 
   @Column(name = "paid_at")

@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS trip.driver_offers
     expires_at                       TIMESTAMP WITH TIME ZONE                           NOT NULL,
     responded_at                     TIMESTAMP WITH TIME ZONE,
     created_at                       TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    version                          BIGINT                   DEFAULT 0                 NOT NULL,
     CONSTRAINT uq_driver_offers_trip_driver UNIQUE (trip_id, driver_id)
 );
 
@@ -111,12 +112,23 @@ CREATE TABLE IF NOT EXISTS platform.outbox_events
     processed_at   TIMESTAMP WITH TIME ZONE
 );
 
-CREATE INDEX IF NOT EXISTS idx_trips_customer ON trip.trips (customer_id);
-CREATE INDEX IF NOT EXISTS idx_trips_pickup_point ON trip.trips USING GIST (pickup_point);
-CREATE INDEX IF NOT EXISTS idx_trips_status ON trip.trips (status);
-CREATE INDEX IF NOT EXISTS idx_trips_driver_history ON trip.trips (driver_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_trips_quote_id ON trip.trips (quote_id);
-CREATE INDEX IF NOT EXISTS idx_driver_offers_trip ON trip.driver_offers (trip_id);
-CREATE INDEX IF NOT EXISTS idx_driver_offers_driver_status ON trip.driver_offers (driver_id, status);
-CREATE INDEX IF NOT EXISTS idx_trip_stops_trip_id ON trip.trip_stops (trip_id);
-CREATE INDEX IF NOT EXISTS idx_outbox_pending_created ON platform.outbox_events (created_at ASC) WHERE status = 'PENDING';
+-- ShedLock table for distributed scheduled tasks
+CREATE TABLE IF NOT EXISTS trip.shedlock
+(
+    name       VARCHAR(64)              NOT NULL PRIMARY KEY,
+    lock_until TIMESTAMP WITH TIME ZONE NOT NULL,
+    locked_at  TIMESTAMP WITH TIME ZONE NOT NULL,
+    locked_by  VARCHAR(255)             NOT NULL
+);
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_trips_customer ON trip.trips (customer_id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_trips_pickup_point ON trip.trips USING GIST (pickup_point);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_trips_status ON trip.trips (status);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_trips_status_created_at ON trip.trips (status, created_at);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_trips_status_accepted_at ON trip.trips (status, accepted_at);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_trips_driver_history ON trip.trips (driver_id, created_at DESC);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_trips_quote_id ON trip.trips (quote_id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_driver_offers_trip ON trip.driver_offers (trip_id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_driver_offers_driver_status ON trip.driver_offers (driver_id, status);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_trip_stops_trip_id ON trip.trip_stops (trip_id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_outbox_pending_created ON platform.outbox_events (created_at ASC) WHERE status = 'PENDING';

@@ -46,6 +46,16 @@ public class DriverOffer {
   @Column(name = "responded_at")
   private Instant respondedAt;
 
+  @CreationTimestamp
+  @Column(name = "created_at", nullable = false, updatable = false)
+  @Builder.Default
+  private Instant createdAt = Instant.now();
+
+  @Version
+  @Column(name = "version", nullable = false)
+  @Builder.Default
+  private Long version = 0L;
+
   @Override
   public boolean equals(Object o) {
     if (this == o) return true;

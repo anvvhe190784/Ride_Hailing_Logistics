@@ -5,12 +5,14 @@ import com.ridehailing.logistics.common.domain.enums.DriverAvailabilityStatus;
 import com.ridehailing.logistics.common.domain.enums.TripStatus;
 import com.ridehailing.logistics.common.dto.ApiResponse;
 import com.ridehailing.logistics.common.dto.FareQuoteResponse;
+import com.ridehailing.logistics.common.event.EventEnvelope;
 import com.ridehailing.logistics.common.event.TripCompletedEvent;
 import com.ridehailing.logistics.common.exception.BaseDomainException;
 import com.ridehailing.logistics.trip.client.DriverClient;
 import com.ridehailing.logistics.trip.client.LocationClient;
 import com.ridehailing.logistics.trip.client.PricingClient;
 import com.ridehailing.logistics.trip.domain.entity.DriverOffer;
+import com.ridehailing.logistics.trip.domain.entity.OutboxEvent;
 import com.ridehailing.logistics.trip.domain.entity.Trip;
 import com.ridehailing.logistics.trip.dto.CreateTripRequest;
 import com.ridehailing.logistics.trip.dto.DriverOfferResponse;
@@ -19,8 +21,10 @@ import com.ridehailing.logistics.trip.dto.TripDetailResponse;
 import com.ridehailing.logistics.trip.event.TripCompletedInternalEvent;
 import com.ridehailing.logistics.trip.event.TripEventProducer;
 import com.ridehailing.logistics.trip.repository.DriverOfferRepository;
+import com.ridehailing.logistics.trip.repository.OutboxEventRepository;
 import com.ridehailing.logistics.trip.repository.TripRepository;
 import com.ridehailing.logistics.trip.service.TripService;
+import jakarta.annotation.PostConstruct;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
@@ -56,12 +60,18 @@ public class TripServiceImpl implements TripService {
   private final LocationClient locationClient;
   private final DriverClient driverClient;
   private final TripEventProducer eventProducer;
+  private final OutboxEventRepository outboxEventRepository;
   private final ObjectMapper objectMapper;
   private final ApplicationEventPublisher applicationEventPublisher;
 
-  @Autowired
-  @Lazy
-  private TripService self;
+  @Autowired @Lazy private TripService self;
+
+  @PostConstruct
+  void init() {
+    if (objectMapper != null) {
+      objectMapper.findAndRegisterModules();
+    }
+  }
 
   private TripService getSelf() {
     return self != null ? self : this;
@@ -128,7 +138,8 @@ public class TripServiceImpl implements TripService {
 
     trip = getSelf().saveInitialTrip(trip);
 
-    // Trigger driver dispatch by finding nearby available drivers (Remote I/O outside @Transactional)
+    // Trigger driver dispatch by finding nearby available drivers (Remote I/O outside
+    // @Transactional)
     try {
       double pickupLat = trip.getPickupPoint() != null ? trip.getPickupPoint().getY() : 21.0285;
       double pickupLng = trip.getPickupPoint() != null ? trip.getPickupPoint().getX() : 105.8542;
@@ -164,12 +175,13 @@ public class TripServiceImpl implements TripService {
     Point pickupPoint = trip.getPickupPoint();
     Trip saved = tripRepository.save(trip);
     saved.setPickupPoint(pickupPoint);
-    log.info("Created trip code {} with ID {} in MATCHING status", trip.getTripCode(), saved.getId());
+    log.info(
+        "Created trip code {} with ID {} in MATCHING status", trip.getTripCode(), saved.getId());
     return saved;
   }
 
   @Override
-  @Transactional
+  @Transactional(noRollbackFor = BaseDomainException.class)
   public DriverOfferResponse respondOffer(UUID offerId, UUID driverId, boolean accept) {
     DriverOffer offer =
         driverOfferRepository
@@ -188,8 +200,9 @@ public class TripServiceImpl implements TripService {
 
     if (offer.getExpiresAt().isBefore(Instant.now())) {
       offer.setStatus("EXPIRED");
+      offer.setRespondedAt(Instant.now());
       driverOfferRepository.save(offer);
-      throw BaseDomainException.conflict("OFFER_EXPIRED", "Offer has expired");
+      return toOfferResponse(offer);
     }
 
     if (!accept) {
@@ -233,7 +246,8 @@ public class TripServiceImpl implements TripService {
       offer.setRespondedAt(Instant.now());
       driverOfferRepository.save(offer);
 
-      log.info("Driver ID {} atomically claimed and accepted Trip ID {}", driverId, offer.getTripId());
+      log.info(
+          "Driver ID {} atomically claimed and accepted Trip ID {}", driverId, offer.getTripId());
       return toOfferResponse(offer);
     } catch (DataIntegrityViolationException ex) {
       log.warn(
@@ -254,13 +268,19 @@ public class TripServiceImpl implements TripService {
 
   @Override
   public TripDetailResponse updateTripStatus(UUID tripId, UUID actorId, TripStatus nextStatus) {
+    return updateTripStatus(tripId, actorId, null, nextStatus);
+  }
+
+  @Override
+  public TripDetailResponse updateTripStatus(
+      UUID tripId, UUID actorId, String actorRole, TripStatus nextStatus) {
     if (nextStatus == TripStatus.ACCEPTED) {
       throw BaseDomainException.badRequest(
           "INVALID_STATE_TRANSITION",
           "Direct transition to ACCEPTED is disallowed; must use respondOffer");
     }
 
-    Trip trip = getSelf().updateTripStatusInDb(tripId, actorId, nextStatus);
+    Trip trip = getSelf().updateTripStatusInDb(tripId, actorId, actorRole, nextStatus);
 
     if (nextStatus == TripStatus.COMPLETED || nextStatus == TripStatus.CANCELLED) {
       if (trip.getDriverId() != null) {
@@ -283,6 +303,13 @@ public class TripServiceImpl implements TripService {
   @Override
   @Transactional
   public Trip updateTripStatusInDb(UUID tripId, UUID actorId, TripStatus nextStatus) {
+    return updateTripStatusInDb(tripId, actorId, null, nextStatus);
+  }
+
+  @Override
+  @Transactional
+  public Trip updateTripStatusInDb(
+      UUID tripId, UUID actorId, String actorRole, TripStatus nextStatus) {
     Trip trip =
         tripRepository
             .findById(tripId)
@@ -292,25 +319,44 @@ public class TripServiceImpl implements TripService {
     validateStateTransition(trip.getStatus(), nextStatus);
 
     // Verify actor authorization on the trip
+    boolean isAdminOrSupport =
+        actorRole != null
+            && ("ADMIN".equalsIgnoreCase(actorRole) || "SUPPORT_STAFF".equalsIgnoreCase(actorRole));
+
     if (nextStatus == TripStatus.CANCELLED) {
-      if (!actorId.equals(trip.getCustomerId()) && !actorId.equals(trip.getDriverId())) {
+      if (!isAdminOrSupport
+          && !actorId.equals(trip.getCustomerId())
+          && !actorId.equals(trip.getDriverId())) {
         throw BaseDomainException.forbidden(
             "ACCESS_DENIED", "Only trip participants can cancel this trip");
       }
     } else {
-      if (trip.getDriverId() == null || !actorId.equals(trip.getDriverId())) {
+      if (!isAdminOrSupport
+          && (trip.getDriverId() == null || !actorId.equals(trip.getDriverId()))) {
         throw BaseDomainException.forbidden(
             "ACCESS_DENIED", "Only the assigned driver can update trip progress");
       }
     }
 
-    trip.setStatus(nextStatus);
     Instant now = Instant.now();
 
-    if (nextStatus == TripStatus.IN_TRIP) {
+    // When transitioning from MATCHING to CANCELLED, expire pending driver offers
+    if (trip.getStatus() == TripStatus.MATCHING && nextStatus == TripStatus.CANCELLED) {
+      driverOfferRepository.expirePendingOffersByTripIds(List.of(tripId), now);
+    }
+
+    trip.setStatus(nextStatus);
+
+    if (nextStatus == TripStatus.ARRIVED) {
+      trip.setArrivedAt(now);
+    } else if (nextStatus == TripStatus.IN_TRIP) {
       trip.setStartedAt(now);
+      trip.setInTripAt(now);
     } else if (nextStatus == TripStatus.COMPLETED) {
       trip.setCompletedAt(now);
+
+      // Persist Transactional Outbox Event within the same DB transaction
+      saveTripCompletedOutboxEvent(trip);
 
       // Publish Spring internal event; listener will publish Kafka event AFTER_COMMIT
       applicationEventPublisher.publishEvent(new TripCompletedInternalEvent(trip));
@@ -318,7 +364,8 @@ public class TripServiceImpl implements TripService {
       trip.setCancelledAt(now);
       trip.setCancelledBy(actorId);
       if (trip.getCancellationReason() == null) {
-        trip.setCancellationReason("Cancelled by " + actorId);
+        trip.setCancellationReason(
+            isAdminOrSupport ? "Cancelled by staff/admin " + actorId : "Cancelled by " + actorId);
       }
     }
 
@@ -342,8 +389,7 @@ public class TripServiceImpl implements TripService {
     boolean valid =
         switch (current) {
           case CREATED -> next == TripStatus.MATCHING || next == TripStatus.CANCELLED;
-          case MATCHING ->
-              next == TripStatus.NO_DRIVER || next == TripStatus.CANCELLED;
+          case MATCHING -> next == TripStatus.NO_DRIVER || next == TripStatus.CANCELLED;
           case ACCEPTED -> next == TripStatus.PICKING_UP || next == TripStatus.CANCELLED;
           case PICKING_UP -> next == TripStatus.ARRIVED || next == TripStatus.CANCELLED;
           case ARRIVED -> next == TripStatus.IN_TRIP || next == TripStatus.CANCELLED;
@@ -382,5 +428,44 @@ public class TripServiceImpl implements TripService {
         o.getStatus(),
         o.getEstimatedPickupDistanceMeters(),
         o.getExpiresAt());
+  }
+
+  private void saveTripCompletedOutboxEvent(Trip trip) {
+    try {
+      TripCompletedEvent event =
+          TripCompletedEvent.builder()
+              .tripId(trip.getId())
+              .tripCode(trip.getTripCode())
+              .customerId(trip.getCustomerId())
+              .driverId(trip.getDriverId())
+              .serviceType(trip.getServiceType())
+              .finalFare(trip.getFinalFare() != null ? trip.getFinalFare() : BigDecimal.ZERO)
+              .currency(trip.getCurrency())
+              .paymentMethod(trip.getPaymentMethod())
+              .completedAt(trip.getCompletedAt() != null ? trip.getCompletedAt() : Instant.now())
+              .build();
+
+      EventEnvelope<TripCompletedEvent> envelope =
+          EventEnvelope.of("TripCompleted", "trip-service", UUID.randomUUID().toString(), event);
+      String jsonPayload = objectMapper.writeValueAsString(envelope);
+
+      OutboxEvent outboxEvent =
+          OutboxEvent.builder()
+              .aggregateType("TRIP")
+              .aggregateId(trip.getId().toString())
+              .eventType("TripCompleted")
+              .payload(jsonPayload)
+              .status("PENDING")
+              .retryCount(0)
+              .build();
+
+      outboxEventRepository.save(outboxEvent);
+      log.info("Saved OutboxEvent for completed trip ID {}", trip.getId());
+    } catch (Exception ex) {
+      log.error(
+          "Failed to persist OutboxEvent for trip ID {}: {}", trip.getId(), ex.getMessage(), ex);
+      throw BaseDomainException.internalError(
+          "OUTBOX_PERSIST_ERROR", "Failed to record trip completion outbox event");
+    }
   }
 }

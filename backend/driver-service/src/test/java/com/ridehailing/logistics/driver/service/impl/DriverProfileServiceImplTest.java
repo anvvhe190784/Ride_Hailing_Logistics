@@ -150,4 +150,88 @@ class DriverProfileServiceImplTest {
     assertEquals(422, ex.getHttpStatus());
     assertTrue(ex.getMessage().contains("at least one active vehicle"));
   }
+
+  @Test
+  void shouldCacheProfileAndServeSubsequentRequestsFromCache() {
+    UUID driverId = UUID.randomUUID();
+    DriverProfile profile =
+        DriverProfile.builder()
+            .driverId(driverId)
+            .userId(driverId)
+            .reviewStatus(DriverReviewStatus.APPROVED)
+            .availabilityStatus(DriverAvailabilityStatus.AVAILABLE)
+            .build();
+
+    DriverProfileResponse expectedResponse =
+        new DriverProfileResponse(
+            driverId,
+            "001234567890",
+            "123 Hanoi Street",
+            DriverReviewStatus.APPROVED,
+            null,
+            DriverAvailabilityStatus.AVAILABLE);
+
+    when(driverProfileRepository.findById(driverId)).thenReturn(Optional.of(profile));
+    when(driverMapper.toResponse(profile)).thenReturn(expectedResponse);
+
+    DriverProfileResponse res1 = service.getProfile(driverId);
+    DriverProfileResponse res2 = service.getProfile(driverId);
+
+    assertNotNull(res1);
+    assertSame(res1, res2);
+    verify(driverProfileRepository, times(1)).findById(driverId);
+  }
+
+  @Test
+  void shouldSubmitKycWithUserIdAndInvalidateCache() {
+    UUID driverId = UUID.randomUUID();
+    DriverProfile existingProfile =
+        DriverProfile.builder()
+            .driverId(driverId)
+            .reviewStatus(DriverReviewStatus.DRAFT)
+            .availabilityStatus(DriverAvailabilityStatus.OFFLINE)
+            .build();
+
+    DriverProfileResponse initialResponse =
+        new DriverProfileResponse(
+            driverId,
+            "001234567890",
+            "123 Hanoi Street",
+            DriverReviewStatus.DRAFT,
+            null,
+            DriverAvailabilityStatus.OFFLINE);
+
+    when(driverProfileRepository.findById(driverId)).thenReturn(Optional.of(existingProfile));
+    when(driverMapper.toResponse(existingProfile)).thenReturn(initialResponse);
+
+    // Warm cache
+    service.getProfile(driverId);
+    verify(driverProfileRepository, times(1)).findById(driverId);
+
+    var kycReq =
+        new com.ridehailing.logistics.driver.dto.request.DriverKycRequest(
+            "001234567890", java.time.LocalDate.of(1995, 5, 20), "456 New Street");
+
+    when(driverProfileRepository.save(any(DriverProfile.class)))
+        .thenAnswer(inv -> inv.getArgument(0));
+
+    DriverProfileResponse updatedResponse =
+        new DriverProfileResponse(
+            driverId,
+            "001234567890",
+            "456 New Street",
+            DriverReviewStatus.PENDING_REVIEW,
+            null,
+            DriverAvailabilityStatus.OFFLINE);
+    when(driverMapper.toResponse(any(DriverProfile.class))).thenReturn(updatedResponse);
+
+    DriverProfileResponse kycResponse = service.submitKyc(driverId, kycReq);
+
+    assertEquals(DriverReviewStatus.PENDING_REVIEW, kycResponse.reviewStatus());
+    assertEquals(driverId, existingProfile.getUserId());
+
+    // Subsequent getProfile should query repository again because cache was evicted (1st getProfile + 1st submitKyc + 2nd getProfile = 3)
+    service.getProfile(driverId);
+    verify(driverProfileRepository, times(3)).findById(driverId);
+  }
 }

@@ -5,9 +5,11 @@ import com.ridehailing.logistics.common.event.TripCompletedEvent;
 import com.ridehailing.logistics.trip.domain.entity.Trip;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
@@ -20,6 +22,10 @@ public class TripEventProducer {
   private final KafkaTemplate<String, Object> kafkaTemplate;
 
   public void publishTripCompleted(Trip trip) {
+    publishTripCompleted(trip, null);
+  }
+
+  public void publishTripCompleted(Trip trip, Runnable onSuccess) {
     TripCompletedEvent event =
         TripCompletedEvent.builder()
             .tripId(trip.getId())
@@ -32,12 +38,27 @@ public class TripEventProducer {
             .paymentMethod(trip.getPaymentMethod())
             .completedAt(trip.getCompletedAt() != null ? trip.getCompletedAt() : Instant.now())
             .build();
-    publishTripCompleted(event, UUID.randomUUID().toString());
+    String correlationId =
+        Optional.ofNullable(MDC.get("correlationId"))
+            .filter(cid -> !cid.isBlank())
+            .orElseGet(() -> UUID.randomUUID().toString());
+    publishTripCompleted(event, correlationId, onSuccess);
   }
 
   public void publishTripCompleted(TripCompletedEvent event, String correlationId) {
+    publishTripCompleted(event, correlationId, null);
+  }
+
+  public void publishTripCompleted(
+      TripCompletedEvent event, String correlationId, Runnable onSuccess) {
+    String effectiveCorrelationId =
+        (correlationId != null && !correlationId.isBlank())
+            ? correlationId
+            : Optional.ofNullable(MDC.get("correlationId"))
+                .filter(cid -> !cid.isBlank())
+                .orElseGet(() -> UUID.randomUUID().toString());
     EventEnvelope<TripCompletedEvent> envelope =
-        EventEnvelope.of("TripCompleted", "trip-service", correlationId, event);
+        EventEnvelope.of("TripCompleted", "trip-service", effectiveCorrelationId, event);
     kafkaTemplate
         .send(TOPIC_TRIP_COMPLETED, event.getTripId().toString(), envelope)
         .whenComplete(
@@ -47,6 +68,13 @@ public class TripEventProducer {
                     "Published TripCompleted event for Trip ID: {} to topic: {}",
                     event.getTripId(),
                     TOPIC_TRIP_COMPLETED);
+                if (onSuccess != null) {
+                  try {
+                    onSuccess.run();
+                  } catch (Exception e) {
+                    log.warn("Error running outbox completion callback for trip {}: {}", event.getTripId(), e.getMessage());
+                  }
+                }
               } else {
                 log.error(
                     "Failed to publish TripCompleted event for Trip ID: {}: {}",

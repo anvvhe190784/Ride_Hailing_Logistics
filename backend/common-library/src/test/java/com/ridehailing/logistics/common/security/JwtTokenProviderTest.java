@@ -3,6 +3,8 @@ package com.ridehailing.logistics.common.security;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.ridehailing.logistics.common.domain.enums.UserRole;
+import io.jsonwebtoken.Claims;
+import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,6 +31,11 @@ class JwtTokenProviderTest {
     assertEquals(userId, jwtTokenProvider.getUserIdFromToken(token));
     assertEquals(UserRole.DRIVER.name(), jwtTokenProvider.getRoleFromToken(token));
     assertEquals(phone, jwtTokenProvider.getPhoneFromToken(token));
+
+    Claims claims = jwtTokenProvider.parseClaims(token);
+    assertNotNull(claims.getId());
+    assertEquals(claims.getId(), jwtTokenProvider.extractJti(claims));
+    assertNotNull(jwtTokenProvider.extractExpiration(claims));
   }
 
   @Test
@@ -57,5 +64,16 @@ class JwtTokenProviderTest {
     assertNotNull(token);
     assertTrue(customProvider.validateToken(token));
     assertEquals(userId, customProvider.getUserIdFromToken(token));
+  }
+
+  @Test
+  void shouldShareDeterministicDevSecretAcrossDefaultInstances() {
+    JwtTokenProvider provider1 = new JwtTokenProvider();
+    JwtTokenProvider provider2 = new JwtTokenProvider();
+    UUID userId = UUID.randomUUID();
+
+    String token = provider1.generateAccessToken(userId, "+84900000000", UserRole.CUSTOMER);
+    assertTrue(provider2.validateToken(token));
+    assertEquals(userId, provider2.getUserIdFromToken(token));
   }
 }

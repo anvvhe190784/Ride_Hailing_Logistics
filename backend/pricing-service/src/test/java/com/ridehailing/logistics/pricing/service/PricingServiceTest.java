@@ -248,4 +248,129 @@ class PricingServiceTest {
 
     assertEquals("QUOTE_ACCESS_DENIED", ex.getErrorCode());
   }
+
+  @Test
+  @DisplayName("should throw FORBIDDEN_ACCESS when non-admin accesses another user's quote")
+  void shouldThrowForbiddenWhenGettingQuoteAsDifferentNonAdminCustomer() {
+    UUID quoteId = UUID.randomUUID();
+    UUID ownerId = UUID.randomUUID();
+    UUID callerId = UUID.randomUUID();
+
+    FareQuote quote =
+        FareQuote.builder()
+            .id(quoteId)
+            .customerId(ownerId)
+            .serviceType(ServiceType.RIDE)
+            .estimatedDistanceMeters(2000)
+            .estimatedDurationSeconds(300)
+            .basePrice(new BigDecimal("15000.00"))
+            .distancePrice(new BigDecimal("20000.00"))
+            .durationPrice(new BigDecimal("5000.00"))
+            .surgeMultiplier(BigDecimal.ONE)
+            .totalFare(new BigDecimal("40000.00"))
+            .currency("VND")
+            .ruleVersion(1)
+            .expiresAt(Instant.now().plus(5, ChronoUnit.MINUTES))
+            .build();
+
+    when(fareQuoteRepository.findById(quoteId)).thenReturn(Optional.of(quote));
+
+    BaseDomainException ex =
+        assertThrows(
+            BaseDomainException.class,
+            () -> pricingService.getQuote(quoteId, callerId, "CUSTOMER"));
+
+    assertEquals("FORBIDDEN_ACCESS", ex.getErrorCode());
+  }
+
+  @Test
+  @DisplayName("should allow owner or ADMIN to get quote")
+  void shouldAllowOwnerOrAdminToGetQuote() {
+    UUID quoteId = UUID.randomUUID();
+    UUID ownerId = UUID.randomUUID();
+    UUID adminId = UUID.randomUUID();
+
+    FareQuote quote =
+        FareQuote.builder()
+            .id(quoteId)
+            .customerId(ownerId)
+            .serviceType(ServiceType.RIDE)
+            .estimatedDistanceMeters(2000)
+            .estimatedDurationSeconds(300)
+            .basePrice(new BigDecimal("15000.00"))
+            .distancePrice(new BigDecimal("20000.00"))
+            .durationPrice(new BigDecimal("5000.00"))
+            .surgeMultiplier(BigDecimal.ONE)
+            .totalFare(new BigDecimal("40000.00"))
+            .currency("VND")
+            .ruleVersion(1)
+            .expiresAt(Instant.now().plus(5, ChronoUnit.MINUTES))
+            .build();
+
+    when(fareQuoteRepository.findById(quoteId)).thenReturn(Optional.of(quote));
+
+    // As owner
+    FareQuoteResponse responseOwner = pricingService.getQuote(quoteId, ownerId, "CUSTOMER");
+    assertNotNull(responseOwner);
+    assertEquals(quoteId, responseOwner.quoteId());
+
+    // As admin
+    FareQuoteResponse responseAdmin = pricingService.getQuote(quoteId, adminId, "ADMIN");
+    assertNotNull(responseAdmin);
+    assertEquals(quoteId, responseAdmin.quoteId());
+  }
+
+  @Test
+  @DisplayName("should deduplicate quote creation when using same idempotency key")
+  void shouldDeduplicateCreateQuoteWithSameIdempotencyKey() {
+    UUID customerId = UUID.randomUUID();
+    FareEstimateRequest request =
+        new FareEstimateRequest(
+            ServiceType.RIDE,
+            "HN",
+            21.028511,
+            105.804817,
+            "Hanoi Opera House",
+            21.036237,
+            105.834641,
+            "West Lake Hanoi");
+
+    when(pricingRuleRepository.findFirstByServiceTypeAndRegionCodeAndIsActiveTrueOrderByVersionDesc(
+            ServiceType.RIDE, "HN"))
+        .thenReturn(Optional.of(mockRule));
+
+    when(fareQuoteRepository.save(any(FareQuote.class)))
+        .thenAnswer(
+            invocation -> {
+              FareQuote saved = invocation.getArgument(0);
+              return FareQuote.builder()
+                  .id(UUID.randomUUID())
+                  .customerId(saved.getCustomerId())
+                  .serviceType(saved.getServiceType())
+                  .pickupPoint(saved.getPickupPoint())
+                  .pickupAddress(saved.getPickupAddress())
+                  .dropoffPoint(saved.getDropoffPoint())
+                  .dropoffAddress(saved.getDropoffAddress())
+                  .estimatedDistanceMeters(saved.getEstimatedDistanceMeters())
+                  .estimatedDurationSeconds(saved.getEstimatedDurationSeconds())
+                  .basePrice(saved.getBasePrice())
+                  .distancePrice(saved.getDistancePrice())
+                  .durationPrice(saved.getDurationPrice())
+                  .surgeMultiplier(saved.getSurgeMultiplier())
+                  .totalFare(saved.getTotalFare())
+                  .currency(saved.getCurrency())
+                  .ruleVersion(saved.getRuleVersion())
+                  .expiresAt(saved.getExpiresAt())
+                  .build();
+            });
+
+    String idempotencyKey = "TEST-IDEMP-" + UUID.randomUUID();
+    FareQuoteResponse first = pricingService.createQuote(customerId, request, idempotencyKey);
+    FareQuoteResponse second = pricingService.createQuote(customerId, request, idempotencyKey);
+
+    assertNotNull(first);
+    assertNotNull(second);
+    assertEquals(first.quoteId(), second.quoteId());
+    verify(fareQuoteRepository, times(1)).save(any(FareQuote.class));
+  }
 }

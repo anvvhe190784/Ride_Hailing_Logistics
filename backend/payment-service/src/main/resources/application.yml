@@ -10,6 +10,11 @@ spring:
   config:
     # noinspection HttpUrlsUsage
     import: "optional:configserver:http://localhost:8888"
+  data:
+    web:
+      pageable:
+        default-page-size: 20
+        max-page-size: 100
   threads:
     virtual:
       enabled: true
@@ -19,8 +24,8 @@ spring:
     password: ${DB_PASSWORD:admin} # pragma: allowlist-secret
     driver-class-name: org.postgresql.Driver
     hikari:
-      maximum-pool-size: 30
-      minimum-idle: 10
+      maximum-pool-size: 15
+      minimum-idle: 5
       idle-timeout: 300000
       max-lifetime: 1800000
       connection-timeout: 5000
@@ -34,6 +39,9 @@ spring:
         format_sql: true
   kafka:
     bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
     consumer:
       group-id: payment-group
       auto-offset-reset: earliest
@@ -54,11 +62,35 @@ eureka:
   instance:
     prefer-ip-address: true
 
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} [%X{correlationId:-}] - %msg%n"
+
 management:
   endpoint:
     health:
       show-details: always
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,db,diskSpace,ping
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
+
+---
+spring:
+  config:
+    activate:
+      on-profile: default
+  jpa:
+    hibernate:
+      ddl-auto: none
+  kafka:
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer

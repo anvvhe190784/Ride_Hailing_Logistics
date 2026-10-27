@@ -3,8 +3,6 @@ package com.ridehailing.logistics.payment.controller;
 import com.ridehailing.logistics.common.dto.ApiResponse;
 import com.ridehailing.logistics.common.exception.BaseDomainException;
 import com.ridehailing.logistics.common.security.SecurityConstants;
-import com.ridehailing.logistics.payment.domain.entity.Wallet;
-import com.ridehailing.logistics.payment.domain.entity.WalletEntry;
 import com.ridehailing.logistics.payment.dto.response.WalletEntryResponse;
 import com.ridehailing.logistics.payment.dto.response.WalletResponse;
 import com.ridehailing.logistics.payment.service.PaymentService;
@@ -33,8 +31,8 @@ public class PaymentController {
       @RequestHeader(value = SecurityConstants.HEADER_CORRELATION_ID, required = false)
           String correlationId) {
     validateDriverOrAdmin(role);
-    Wallet wallet = paymentService.getWalletByDriver(driverId);
-    return ResponseEntity.ok(ApiResponse.success(WalletResponse.fromEntity(wallet), correlationId));
+    WalletResponse wallet = paymentService.getWalletByDriver(driverId);
+    return ResponseEntity.ok(ApiResponse.success(wallet, correlationId));
   }
 
   @GetMapping("/wallets/statement")
@@ -45,8 +43,7 @@ public class PaymentController {
       @RequestHeader(value = SecurityConstants.HEADER_CORRELATION_ID, required = false)
           String correlationId) {
     validateDriverOrAdmin(role);
-    Page<WalletEntry> entries = paymentService.getWalletStatement(driverId, pageable);
-    Page<WalletEntryResponse> response = entries.map(WalletEntryResponse::fromEntity);
+    Page<WalletEntryResponse> response = paymentService.getWalletStatement(driverId, pageable);
     return ResponseEntity.ok(ApiResponse.success(response, correlationId));
   }
 

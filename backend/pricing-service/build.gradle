@@ -13,4 +13,6 @@ dependencies {
     implementation 'org.postgresql:postgresql'
     implementation 'org.locationtech.jts:jts-core:1.19.0'
     implementation 'org.hibernate.orm:hibernate-spatial'
+    implementation 'net.javacrumbs.shedlock:shedlock-spring'
+    implementation 'net.javacrumbs.shedlock:shedlock-provider-jdbc-template'
 }

@@ -31,6 +31,10 @@ public interface TripRepository extends JpaRepository<Trip, UUID> {
 
   boolean existsByDriverIdAndStatusIn(UUID driverId, List<TripStatus> statuses);
 
+  @Query(
+      "SELECT t FROM Trip t WHERE t.status = :status AND (t.inTripAt < :before OR (t.inTripAt IS NULL AND t.startedAt < :before) OR (t.inTripAt IS NULL AND t.startedAt IS NULL AND t.updatedAt < :before))")
+  List<Trip> findStaleInTripTrips(@Param("status") TripStatus status, @Param("before") Instant before);
+
   @Modifying(clearAutomatically = true)
   @Query(
       "UPDATE Trip t SET t.driverId = :driverId, t.status = com.ridehailing.logistics.common.domain.enums.TripStatus.ACCEPTED, t.acceptedAt = :now, t.updatedAt = :now, t.version = t.version + 1 WHERE t.id = :tripId AND t.status = com.ridehailing.logistics.common.domain.enums.TripStatus.MATCHING AND t.driverId IS NULL")

@@ -13,21 +13,26 @@ spring:
   threads:
     virtual:
       enabled: true
+  data:
+    web:
+      pageable:
+        default-page-size: 20
+        max-page-size: 100
   datasource:
     url: jdbc:postgresql://localhost:5432/trip_db?currentSchema=trip
     username: postgres
     password: ${DB_PASSWORD:admin} # pragma: allowlist-secret
     driver-class-name: org.postgresql.Driver
     hikari:
-      maximum-pool-size: 30
-      minimum-idle: 10
+      maximum-pool-size: 15
+      minimum-idle: 5
       idle-timeout: 300000
       max-lifetime: 1800000
       connection-timeout: 5000
   jpa:
     open-in-view: false
     hibernate:
-      ddl-auto: validate
+      ddl-auto: none
     properties:
       hibernate:
         default_schema: trip
@@ -38,6 +43,21 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+  cloud:
+    openfeign:
+      circuitbreaker:
+        enabled: true
+      httpclient:
+        hc5:
+          enabled: true
+        max-connections: 200
+        max-connections-per-route: 50
+      client:
+        config:
+          default:
+            connectTimeout: 3000
+            readTimeout: 5000
+            loggerLevel: BASIC
 
 eureka:
   client:
@@ -49,36 +69,52 @@ eureka:
 
 resilience4j:
   circuitbreaker:
+    configs:
+      default:
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
     instances:
       driverService:
-        sliding-window-size: 10
-        failure-rate-threshold: 50
-        wait-duration-in-open-state: 10s
-        permitted-number-of-calls-in-half-open-state: 3
+        base-config: default
       pricingService:
-        sliding-window-size: 10
-        failure-rate-threshold: 50
-        wait-duration-in-open-state: 10s
-        permitted-number-of-calls-in-half-open-state: 3
+        base-config: default
       locationService:
-        sliding-window-size: 10
-        failure-rate-threshold: 50
-        wait-duration-in-open-state: 10s
-        permitted-number-of-calls-in-half-open-state: 3
+        base-config: default
+      driverClient:
+        base-config: default
+      pricingClient:
+        base-config: default
+      locationClient:
+        base-config: default
 
-feign:
-  client:
-    config:
-      default:
-        connectTimeout: 3000
-        readTimeout: 5000
-        loggerLevel: BASIC
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} [%X{correlationId:-}] - %msg%n"
 
 management:
   endpoint:
     health:
       show-details: always
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,db,diskSpace,ping
   endpoints:
     web:
       exposure:
-        include: health,info,circuitbreakers
+        include: health,info,circuitbreakers,prometheus
+
+---
+spring:
+  config:
+    activate:
+      on-profile: default
+  jpa:
+    hibernate:
+      ddl-auto: none

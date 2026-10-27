@@ -9,7 +9,14 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
 @Entity
-@Table(name = "pricing_rules", schema = "pricing")
+@Table(
+    name = "pricing_rules",
+    schema = "pricing",
+    uniqueConstraints = {
+      @UniqueConstraint(
+          name = "uq_pricing_service_region_version",
+          columnNames = {"service_type", "region_code", "version"})
+    })
 @Getter
 @Setter
 @Builder

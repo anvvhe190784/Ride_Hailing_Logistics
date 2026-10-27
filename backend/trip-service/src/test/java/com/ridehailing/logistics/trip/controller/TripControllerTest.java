@@ -110,4 +110,68 @@ class TripControllerTest {
     assertEquals("FORBIDDEN_ACCESS", ex.getErrorCode());
     assertEquals("You are not authorized to view this trip", ex.getMessage());
   }
+
+  @Test
+  @DisplayName("createTrip should succeed for CUSTOMER role")
+  void shouldAllowCustomerToCreateTrip() {
+    com.ridehailing.logistics.trip.dto.CreateTripRequest req =
+        new com.ridehailing.logistics.trip.dto.CreateTripRequest(
+            UUID.randomUUID(), "idemp-key-1", PaymentMethod.CASH);
+    when(tripService.createTrip(eq(customerId), eq(req))).thenReturn(tripDetail);
+
+    ResponseEntity<ApiResponse<TripDetailResponse>> response =
+        tripController.createTrip(customerId, "CUSTOMER", null, req, "corr-create");
+
+    assertNotNull(response);
+    assertEquals(201, response.getStatusCode().value());
+    verify(tripService, times(1)).createTrip(customerId, req);
+  }
+
+  @Test
+  @DisplayName("createTrip should reject non-customer, non-admin role with 403 FORBIDDEN_ROLE")
+  void shouldRejectDriverFromCreatingTrip() {
+    com.ridehailing.logistics.trip.dto.CreateTripRequest req =
+        new com.ridehailing.logistics.trip.dto.CreateTripRequest(
+            UUID.randomUUID(), "idemp-key-2", PaymentMethod.CASH);
+
+    BaseDomainException ex =
+        assertThrows(
+            BaseDomainException.class,
+            () -> tripController.createTrip(customerId, "DRIVER", null, req, "corr-create-fail"));
+
+    assertEquals(403, ex.getHttpStatus());
+    assertEquals("FORBIDDEN_ROLE", ex.getErrorCode());
+    verify(tripService, never()).createTrip(any(), any());
+  }
+
+  @Test
+  @DisplayName("createTrip should use header Idempotency-Key when provided")
+  void shouldUseHeaderIdempotencyKeyWhenPresent() {
+    com.ridehailing.logistics.trip.dto.CreateTripRequest req =
+        new com.ridehailing.logistics.trip.dto.CreateTripRequest(
+            UUID.randomUUID(), "body-key", PaymentMethod.CASH);
+    when(tripService.createTrip(eq(customerId), any())).thenReturn(tripDetail);
+
+    tripController.createTrip(customerId, "CUSTOMER", "header-key-override", req, "corr-idemp");
+
+    org.mockito.ArgumentCaptor<com.ridehailing.logistics.trip.dto.CreateTripRequest> captor =
+        org.mockito.ArgumentCaptor.forClass(com.ridehailing.logistics.trip.dto.CreateTripRequest.class);
+    verify(tripService, times(1)).createTrip(eq(customerId), captor.capture());
+    assertEquals("header-key-override", captor.getValue().idempotencyKey());
+  }
+
+  @Test
+  @DisplayName("updateTripStatus should forward actorRole to tripService")
+  void shouldForwardActorRoleToTripService() {
+    when(tripService.updateTripStatus(tripId, driverId, "DRIVER", TripStatus.ARRIVED))
+        .thenReturn(tripDetail);
+
+    ResponseEntity<ApiResponse<TripDetailResponse>> response =
+        tripController.updateTripStatus(tripId, TripStatus.ARRIVED, driverId, "DRIVER", "corr-update");
+
+    assertNotNull(response);
+    assertEquals(200, response.getStatusCode().value());
+    verify(tripService, times(1))
+        .updateTripStatus(tripId, driverId, "DRIVER", TripStatus.ARRIVED);
+  }
 }

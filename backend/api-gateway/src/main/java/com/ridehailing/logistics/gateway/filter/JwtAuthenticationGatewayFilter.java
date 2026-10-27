@@ -2,10 +2,12 @@ package com.ridehailing.logistics.gateway.filter;
 
 import com.ridehailing.logistics.common.security.JwtTokenProvider;
 import com.ridehailing.logistics.common.security.SecurityConstants;
+import com.ridehailing.logistics.common.security.TokenBlacklistService;
 import io.jsonwebtoken.Claims;
 import java.util.List;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
@@ -30,10 +32,19 @@ public class JwtAuthenticationGatewayFilter implements GlobalFilter, Ordered {
           "/actuator",
           "/eureka");
   private final JwtTokenProvider jwtTokenProvider;
+  private final TokenBlacklistService tokenBlacklistService;
 
+  public JwtAuthenticationGatewayFilter(@Value("${app.security.jwt.secret:}") String jwtSecret) {
+    this(jwtSecret, new TokenBlacklistService());
+  }
+
+  @Autowired
   public JwtAuthenticationGatewayFilter(
-      @Value("${app.security.jwt.secret:}") String jwtSecret) {
+      @Value("${app.security.jwt.secret:}") String jwtSecret,
+      @Autowired(required = false) TokenBlacklistService tokenBlacklistService) {
     this.jwtTokenProvider = new JwtTokenProvider(jwtSecret);
+    this.tokenBlacklistService =
+        tokenBlacklistService != null ? tokenBlacklistService : new TokenBlacklistService();
   }
 
   @Override
@@ -64,8 +75,7 @@ public class JwtAuthenticationGatewayFilter implements GlobalFilter, Ordered {
     String authHeader = sanitizedRequest.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
     if (authHeader == null || !authHeader.startsWith("Bearer ")) {
       log.warn("Missing or invalid Authorization header for path: {}", path);
-      sanitizedExchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
-      return sanitizedExchange.getResponse().setComplete();
+      return unauthorized(sanitizedExchange, "Missing or invalid Authorization header");
     }
 
     String token = authHeader.substring(7);
@@ -74,14 +84,19 @@ public class JwtAuthenticationGatewayFilter implements GlobalFilter, Ordered {
       claims = jwtTokenProvider.parseClaims(token);
     } catch (Exception e) {
       log.warn("Expired or invalid JWT token for path: {}", path);
-      sanitizedExchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
-      return sanitizedExchange.getResponse().setComplete();
+      return unauthorized(sanitizedExchange, "Expired or invalid JWT token");
     }
 
     if (!jwtTokenProvider.isAccessToken(claims)) {
       log.warn("Non-access token presented for path: {}", path);
-      sanitizedExchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
-      return sanitizedExchange.getResponse().setComplete();
+      return unauthorized(sanitizedExchange, "Provided token is not an access token");
+    }
+
+    if (tokenBlacklistService != null
+        && (tokenBlacklistService.isBlacklisted(token)
+            || (claims.getId() != null && tokenBlacklistService.isBlacklisted(claims.getId())))) {
+      log.warn("Revoked or blacklisted token presented for path: {}", path);
+      return unauthorized(sanitizedExchange, "Token has been revoked");
     }
 
     // 4. Extract claims and propagate trusted headers to downstream microservices
@@ -102,9 +117,14 @@ public class JwtAuthenticationGatewayFilter implements GlobalFilter, Ordered {
       return chain.filter(sanitizedExchange.mutate().request(authenticatedRequest).build());
     } catch (Exception e) {
       log.error("Error processing JWT claims: {}", e.getMessage());
-      sanitizedExchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
-      return sanitizedExchange.getResponse().setComplete();
+      return unauthorized(sanitizedExchange, "Error processing JWT claims");
     }
+  }
+
+  private Mono<Void> unauthorized(ServerWebExchange exchange, String message) {
+    log.warn("Unauthorized request: {}", message);
+    exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+    return exchange.getResponse().setComplete();
   }
 
   @Override

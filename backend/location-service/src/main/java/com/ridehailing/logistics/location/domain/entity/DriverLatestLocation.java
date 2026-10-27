@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 import org.locationtech.jts.geom.Point;
 
@@ -56,15 +57,25 @@ public class DriverLatestLocation {
   @Column(name = "device_timestamp", nullable = false)
   private Instant deviceTimestamp;
 
+  @Column(name = "server_timestamp", nullable = false)
+  @Builder.Default
+  private Instant serverTimestamp = Instant.now();
+
+  @CreationTimestamp
+  @Column(name = "created_at", nullable = false, updatable = false)
+  @Builder.Default
+  private Instant createdAt = Instant.now();
+
   @UpdateTimestamp
   @Column(name = "updated_at", nullable = false)
   private Instant updatedAt;
 
   public Instant getServerTimestamp() {
-    return updatedAt;
+    return serverTimestamp != null ? serverTimestamp : updatedAt;
   }
 
   public void setServerTimestamp(Instant serverTimestamp) {
+    this.serverTimestamp = serverTimestamp;
     this.updatedAt = serverTimestamp;
   }
 

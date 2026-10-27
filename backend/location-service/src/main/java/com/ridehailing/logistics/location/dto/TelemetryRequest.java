@@ -18,6 +18,14 @@ public record TelemetryRequest(
         BigDecimal longitude,
     Double accuracyMeters,
     Double headingDegrees,
-    Double speedMps,
-    @NotNull(message = "Sequence number is required") Long sequenceNum,
-    @NotNull(message = "Device timestamp is required") Instant deviceTimestamp) {}
+    @DecimalMin(value = "0.0", message = "Speed must be >= 0.0")
+        @DecimalMax(
+            value = "69.44",
+            message = "GPS teleportation/spoofing detected: speed exceeds 250 km/h (69.44 m/s)")
+        Double speedMps,
+    Long sequenceNum,
+    @NotNull(message = "Device timestamp is required") Instant deviceTimestamp) {
+  public Long sequenceNum() {
+    return sequenceNum != null ? sequenceNum : 1L;
+  }
+}

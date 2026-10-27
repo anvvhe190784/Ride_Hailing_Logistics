@@ -36,4 +36,8 @@ public class BaseDomainException extends RuntimeException {
   public static BaseDomainException businessRuleViolation(String message) {
     return new BaseDomainException("BUSINESS_RULE_VIOLATION", message, 422);
   }
+
+  public static BaseDomainException internalError(String errorCode, String message) {
+    return new BaseDomainException(errorCode, message, 500);
+  }
 }

@@ -37,6 +37,8 @@ subprojects {
             dependency 'io.jsonwebtoken:jjwt-impl:0.12.6'
             dependency 'io.jsonwebtoken:jjwt-jackson:0.12.6'
             dependency 'io.github.resilience4j:resilience4j-spring-boot3:2.2.0'
+            dependency 'net.javacrumbs.shedlock:shedlock-spring:5.16.0'
+            dependency 'net.javacrumbs.shedlock:shedlock-provider-jdbc-template:5.16.0'
         }
     }
 

@@ -15,6 +15,13 @@ spring:
       enabled: true
   cloud:
     gateway:
+      httpclient:
+        connect-timeout: 3000
+        response-timeout: 10s
+        pool:
+          type: ELASTIC
+          max-idle-time: 15s
+          max-life-time: 60s
       default-filters:
         - name: SecureHeaders
       globalcors:
@@ -38,7 +45,7 @@ spring:
             maxAge: 3600
       discovery:
         locator:
-          enabled: true
+          enabled: false
           lower-case-service-id: true
       routes:
         - id: iam-service-route
@@ -79,17 +86,33 @@ eureka:
   instance:
     prefer-ip-address: true
 
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} [%X{correlationId:-}] - %msg%n"
+
 management:
   endpoint:
     health:
       show-details: always
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,ping
   endpoints:
     web:
       exposure:
-        include: health,info,gateway
+        include: health,info,gateway,prometheus
 
 app:
   security:
     jwt:
-      secret: ${JWT_SECRET}
+      secret: ${JWT_SECRET:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+  gateway:
+    rate-limit:
+      enabled: true
+      replenish-rate: 50
+      burst-capacity: 100
 

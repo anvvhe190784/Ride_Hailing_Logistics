@@ -8,6 +8,8 @@ import com.ridehailing.logistics.common.domain.enums.AccountStatus;
 import com.ridehailing.logistics.common.domain.enums.UserRole;
 import com.ridehailing.logistics.common.exception.BaseDomainException;
 import com.ridehailing.logistics.common.security.JwtTokenProvider;
+import com.ridehailing.logistics.common.security.TokenBlacklistService;
+import com.ridehailing.logistics.iam.domain.entity.AuditLog;
 import com.ridehailing.logistics.iam.domain.entity.RefreshToken;
 import com.ridehailing.logistics.iam.domain.entity.User;
 import com.ridehailing.logistics.iam.dto.request.LoginRequest;
@@ -17,8 +19,10 @@ import com.ridehailing.logistics.iam.dto.request.RegisterRequest;
 import com.ridehailing.logistics.iam.dto.response.AuthResponse;
 import com.ridehailing.logistics.iam.dto.response.UserResponse;
 import com.ridehailing.logistics.iam.mapper.UserMapper;
+import com.ridehailing.logistics.iam.repository.AuditLogRepository;
 import com.ridehailing.logistics.iam.repository.RefreshTokenRepository;
 import com.ridehailing.logistics.iam.repository.UserRepository;
+import io.jsonwebtoken.Claims;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -36,21 +40,26 @@ class AuthServiceImplTest {
   @Mock private RefreshTokenRepository refreshTokenRepository;
   @Mock private UserMapper userMapper;
   @Mock private PasswordEncoder passwordEncoder;
+  @Mock private AuditLogRepository auditLogRepository;
 
   private JwtTokenProvider jwtTokenProvider;
+  private TokenBlacklistService tokenBlacklistService;
   private AuthServiceImpl authService;
 
   @BeforeEach
   void setUp() {
     jwtTokenProvider =
         new JwtTokenProvider("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+    tokenBlacklistService = new TokenBlacklistService();
     authService =
         new AuthServiceImpl(
             userRepository,
             refreshTokenRepository,
             userMapper,
             passwordEncoder,
-            jwtTokenProvider);
+            jwtTokenProvider,
+            auditLogRepository,
+            tokenBlacklistService);
   }
 
   @Test
@@ -81,6 +90,7 @@ class AuthServiceImplTest {
     assertNotNull(response);
     assertNotNull(response.accessToken());
     verify(userRepository).save(any(User.class));
+    verify(auditLogRepository).save(any(AuditLog.class));
   }
 
   @Test
@@ -165,6 +175,24 @@ class AuthServiceImplTest {
 
     assertTrue(storedToken.getRevoked());
     verify(refreshTokenRepository).save(storedToken);
+    verify(auditLogRepository).save(any(AuditLog.class));
+  }
+
+  @Test
+  void shouldBlacklistAccessTokenAndJtiOnLogoutWithAuthHeader() {
+    UUID userId = UUID.randomUUID();
+    String accessToken = jwtTokenProvider.generateAccessToken(userId, "+84987654321", UserRole.CUSTOMER);
+    String refreshToken = jwtTokenProvider.generateRefreshToken(userId);
+    LogoutRequest logoutRequest = new LogoutRequest(refreshToken, accessToken);
+
+    Claims claims = jwtTokenProvider.parseClaims(accessToken);
+    String jti = claims.getId();
+
+    authService.logout(logoutRequest, "Bearer " + accessToken);
+
+    assertTrue(tokenBlacklistService.isBlacklisted(accessToken));
+    assertTrue(tokenBlacklistService.isBlacklisted(jti));
+    verify(auditLogRepository).save(any(AuditLog.class));
   }
 
   @Test

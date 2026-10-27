@@ -1,0 +1,647 @@
+{
+  "info": {
+    "_postman_id": "b8f6e2a1-3c5d-4f9e-a812-7890abcdef12",
+    "name": "Ride-Hailing & Logistics Platform (Thesis Defense 21 UCs)",
+    "description": "Postman Collection hoàn chỉnh cho 21 Use Cases của hệ thống Microservices Ride-Hailing & Logistics.\nTích hợp sẵn script tự động lưu Token, ID cho các luồng nghiệp vụ liên hoàn từ Đăng nhập, Duyệt hồ sơ, Cập nhật GPS, Tính cước, Đặt xe, Nhận cuốc đến Quyết toán ví.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01. Authentication & Security (IAM)",
+      "description": "Các Use Case liên quan đến đăng ký, đăng nhập theo từng Role, cấp Access/Refresh Token và thu hồi Token (Blacklist).",
+      "item": [
+        {
+          "name": "1.1 Register New Customer",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"0988776655\",\n  \"email\": \"newbie.customer@example.com\",\n  \"password\": \"password123\",\n  \"fullName\": \"Trần Thị Khách Mới\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/register",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "1.2 Login as Customer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if ((jsonData.data) && (jsonData.code === 'SUCCESS' || jsonData.success !== false)) {",
+                  "    pm.environment.set(\"customer_token\", jsonData.data.accessToken);",
+                  "    pm.environment.set(\"refresh_token\", jsonData.data.refreshToken);",
+                  "    if (jsonData.data.user) {",
+                  "        pm.environment.set(\"customer_id\", jsonData.data.user.id);",
+                  "    }",
+                  "    console.log(\"Saved customer_token: \" + jsonData.data.accessToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{customer_phone}}\",\n  \"password\": \"{{customer_password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "1.3 Login as Driver",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if ((jsonData.data) && (jsonData.code === 'SUCCESS' || jsonData.success !== false)) {",
+                  "    pm.environment.set(\"driver_token\", jsonData.data.accessToken);",
+                  "    if (jsonData.data.user) {",
+                  "        pm.environment.set(\"driver_id\", jsonData.data.user.id);",
+                  "    }",
+                  "    console.log(\"Saved driver_token: \" + jsonData.data.accessToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{driver_phone}}\",\n  \"password\": \"{{driver_password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "1.4 Login as Admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if ((jsonData.data) && (jsonData.code === 'SUCCESS' || jsonData.success !== false)) {",
+                  "    pm.environment.set(\"admin_token\", jsonData.data.accessToken);",
+                  "    console.log(\"Saved admin_token: \" + jsonData.data.accessToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{admin_phone}}\",\n  \"password\": \"{{admin_password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "1.5 Login as Support Staff",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if ((jsonData.data) && (jsonData.code === 'SUCCESS' || jsonData.success !== false)) {",
+                  "    pm.environment.set(\"support_token\", jsonData.data.accessToken);",
+                  "    console.log(\"Saved support_token: \" + jsonData.data.accessToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{support_phone}}\",\n  \"password\": \"{{support_password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "1.6 Refresh Access Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if ((jsonData.data) && (jsonData.code === 'SUCCESS' || jsonData.success !== false)) {",
+                  "    pm.environment.set(\"customer_token\", jsonData.data.accessToken);",
+                  "    pm.environment.set(\"refresh_token\", jsonData.data.refreshToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/refresh-token",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "refresh-token"]
+            }
+          }
+        },
+        {
+          "name": "1.7 Logout & Blacklist Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{customer_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/logout",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "logout"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02. Driver Operations & KYC (Driver Service)",
+      "description": "Quản lý vòng đời tài xế, nộp hồ sơ, Admin phê duyệt hồ sơ KYC, và cập nhật trạng thái hoạt động.",
+      "item": [
+        {
+          "name": "2.1 Get My Driver Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/drivers/me",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "drivers", "me"]
+            }
+          }
+        },
+        {
+          "name": "2.2 Admin Approve Driver KYC",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/drivers/{{new_driver_id}}/approve",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "drivers", "{{new_driver_id}}", "approve"]
+            }
+          }
+        },
+        {
+          "name": "2.3 Driver Set Availability (AVAILABLE)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/drivers/availability?status=AVAILABLE",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "drivers", "availability"],
+              "query": [
+                { "key": "status", "value": "AVAILABLE" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "2.4 Driver Set Availability (OFFLINE)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/drivers/availability?status=OFFLINE",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "drivers", "availability"],
+              "query": [
+                { "key": "status", "value": "OFFLINE" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03. Realtime Location & Redis GEO (Location Service)",
+      "description": "Cập nhật tọa độ GPS thiết bị tài xế và truy vấn tài xế lân cận bằng Redis GEO.",
+      "item": [
+        {
+          "name": "3.1 Driver Update GPS Location",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"latitude\": 21.028511,\n  \"longitude\": 105.854444,\n  \"speedMps\": 8.5,\n  \"headingDegrees\": 45.0,\n  \"accuracyMeters\": 3.5,\n  \"sequenceNum\": 1,\n  \"deviceTimestamp\": \"2026-10-27T12:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/locations/telemetry",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "locations", "telemetry"]
+            }
+          }
+        },
+        {
+          "name": "3.2 Query Nearby Available Drivers (3km Radius)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customer_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/locations/nearby-drivers?latitude=21.028511&longitude=105.854444&radiusMeters=3000&limit=5",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "locations", "nearby-drivers"],
+              "query": [
+                { "key": "latitude", "value": "21.028511" },
+                { "key": "longitude", "value": "105.854444" },
+                { "key": "radiusMeters", "value": "3000" },
+                { "key": "limit", "value": "5" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "04. Dynamic Fare Estimation & Quote (Pricing Service)",
+      "description": "Tính toán giá cước tự động dựa trên công thức Haversine, hệ số đường phố 1.3 và khóa báo giá trong 10 phút.",
+      "item": [
+        {
+          "name": "4.1 Estimate Fare & Create Quote",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if ((jsonData.data) && (jsonData.code === 'SUCCESS' || jsonData.success !== false)) {",
+                  "    pm.environment.set(\"quote_id\", jsonData.data.quoteId);",
+                  "    console.log(\"Saved new quote_id: \" + jsonData.data.quoteId);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customer_token}}" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceType\": \"RIDE\",\n  \"regionCode\": \"VN-HN\",\n  \"pickupAddress\": \"Nhà hát Lớn Hà Nội, Hoàn Kiếm\",\n  \"pickupLat\": 21.028511,\n  \"pickupLng\": 105.854444,\n  \"dropoffAddress\": \"Đại học Bách Khoa Hà Nội, Hai Bà Trưng\",\n  \"dropoffLat\": 21.004444,\n  \"dropoffLng\": 105.843333\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/pricing/quotes",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "pricing", "quotes"]
+            }
+          }
+        },
+        {
+          "name": "4.2 Get Quote Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customer_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/pricing/quotes/{{quote_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "pricing", "quotes", "{{quote_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05. Trip Lifecycle & Concurrency (Trip Service)",
+      "description": "Khách đặt xe (tiêu thụ báo giá), tài xế nhận cuốc (phòng thủ Concurrency), chuyển đổi trạng thái FSM và hoàn thành chuyến.",
+      "item": [
+        {
+          "name": "5.1 Customer Create Trip (Book Ride)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if ((jsonData.data) && (jsonData.code === 'SUCCESS' || jsonData.success !== false)) {",
+                  "    var tripId = jsonData.data.tripId || jsonData.data.id;",
+                  "    pm.environment.set(\"trip_id\", tripId);",
+                  "    console.log(\"Saved trip_id: \" + tripId);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customer_token}}" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quoteId\": \"{{quote_id}}\",\n  \"idempotencyKey\": \"{{$guid}}\",\n  \"paymentMethod\": \"CASH\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/trips",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "trips"]
+            }
+          }
+        },
+        {
+          "name": "5.2 Driver Respond to Offer (Accept Trip)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accept\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/trips/offers/{{offer_id}}/respond",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "trips", "offers", "{{offer_id}}", "respond"]
+            }
+          }
+        },
+        {
+          "name": "5.3 Driver Update Status to PICKING_UP",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/trips/{{trip_id}}/status?nextStatus=PICKING_UP",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "trips", "{{trip_id}}", "status"],
+              "query": [
+                { "key": "nextStatus", "value": "PICKING_UP" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "5.4 Driver Update Status to ARRIVED",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/trips/{{trip_id}}/status?nextStatus=ARRIVED",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "trips", "{{trip_id}}", "status"],
+              "query": [
+                { "key": "nextStatus", "value": "ARRIVED" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "5.5 Driver Update Status to IN_TRIP",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/trips/{{trip_id}}/status?nextStatus=IN_TRIP",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "trips", "{{trip_id}}", "status"],
+              "query": [
+                { "key": "nextStatus", "value": "IN_TRIP" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "5.6 Driver Update Status to COMPLETED (Triggers Outbox & Kafka)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/trips/{{trip_id}}/status?nextStatus=COMPLETED",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "trips", "{{trip_id}}", "status"],
+              "query": [
+                { "key": "nextStatus", "value": "COMPLETED" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "5.7 Get Trip Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customer_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/trips/{{trip_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "trips", "{{trip_id}}"]
+            }
+          }
+        },
+        {
+          "name": "5.8 Customer Cancel Trip",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customer_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/trips/{{trip_id}}/status?nextStatus=CANCELLED",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "trips", "{{trip_id}}", "status"],
+              "query": [
+                { "key": "nextStatus", "value": "CANCELLED" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "06. Billing, Ledger & Wallets (Payment Service)",
+      "description": "Tra cứu số dư ví tài xế và xem sao kê các bút toán biến động số dư trong sổ cái kế toán bất biến.",
+      "item": [
+        {
+          "name": "6.1 Get My Driver Wallet Balance",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/payments/wallets/me",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "payments", "wallets", "me"]
+            }
+          }
+        },
+        {
+          "name": "6.2 Get My Driver Wallet Statement (Paginated)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/payments/wallets/statement?page=0&size=20",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "payments", "wallets", "statement"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "20" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "07. Edge Cases & Concurrency Defense (Demo Phản biện)",
+      "description": "Các kịch bản demo bảo vệ kỹ thuật: Chống BOLA/IDOR, Chống vi phạm máy trạng thái FSM, và Chống gian lận GPS.",
+      "item": [
+        {
+          "name": "7.1 Demo 403 Forbidden: BOLA Violation (Customer views Driver Wallet)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customer_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/payments/wallets/me",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "payments", "wallets", "me"]
+            }
+          }
+        },
+        {
+          "name": "7.2 Demo 409 Conflict: Invalid State Machine Jump (MATCHING to COMPLETED)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/trips/{{trip_id}}/status?nextStatus=COMPLETED",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "trips", "{{trip_id}}", "status"],
+              "query": [
+                { "key": "nextStatus", "value": "COMPLETED" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "7.3 Demo 400 Bad Request: GPS Teleportation (> 250km/h)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"latitude\": 10.776889,\n  \"longitude\": 106.700806,\n  \"speedMps\": 300.0,\n  \"headingDegrees\": 0.0,\n  \"accuracyMeters\": 5.0,\n  \"sequenceNum\": 2,\n  \"deviceTimestamp\": \"2026-10-27T12:00:01Z\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/locations/telemetry",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "locations", "telemetry"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

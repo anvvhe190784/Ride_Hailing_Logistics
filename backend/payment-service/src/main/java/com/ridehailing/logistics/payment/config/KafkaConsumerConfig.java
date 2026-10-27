@@ -7,7 +7,7 @@ import org.springframework.kafka.core.KafkaOperations;
 import org.springframework.kafka.listener.CommonErrorHandler;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
-import org.springframework.util.backoff.FixedBackOff;
+import org.springframework.kafka.support.ExponentialBackOffWithMaxRetries;
 
 @Configuration
 public class KafkaConsumerConfig {
@@ -17,9 +17,12 @@ public class KafkaConsumerConfig {
     DeadLetterPublishingRecoverer recoverer =
         new DeadLetterPublishingRecoverer(
             kafkaOperations,
-            (record, ex) -> new TopicPartition("trip.completed.DLT", record.partition()));
+            (record, ex) -> new TopicPartition("trip.completed.DLT", -1));
 
-    FixedBackOff backOff = new FixedBackOff(2000L, 3L);
+    ExponentialBackOffWithMaxRetries backOff = new ExponentialBackOffWithMaxRetries(3);
+    backOff.setInitialInterval(1000L);
+    backOff.setMultiplier(2.0);
+    backOff.setMaxInterval(10000L);
     return new DefaultErrorHandler(recoverer, backOff);
   }
 }

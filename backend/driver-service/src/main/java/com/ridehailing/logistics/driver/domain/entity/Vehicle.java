@@ -32,11 +32,17 @@ public class Vehicle {
   @Column(name = "license_plate", nullable = false, unique = true, length = 32)
   private String licensePlate;
 
+  @Column(name = "make", length = 50)
+  private String make;
+
   @Column(length = 50)
   private String brand;
 
   @Column(length = 50)
   private String model;
+
+  @Column(name = "year")
+  private Integer year;
 
   @Column(length = 30)
   private String color;

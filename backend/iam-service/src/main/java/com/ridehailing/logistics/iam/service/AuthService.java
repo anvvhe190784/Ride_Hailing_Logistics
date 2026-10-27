@@ -17,5 +17,7 @@ public interface AuthService {
 
   void logout(LogoutRequest request);
 
+  void logout(LogoutRequest request, String authHeader);
+
   UserResponse getUserProfile(UUID userId);
 }

@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS driver.driver_profiles
     availability_status VARCHAR(32)              DEFAULT 'OFFLINE'         NOT NULL,
     rating              NUMERIC(3, 2)            DEFAULT 5.00              NOT NULL,
     total_trips         INT                      DEFAULT 0                 NOT NULL,
+    version             BIGINT                   DEFAULT 0                 NOT NULL,
     created_at          TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at          TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
@@ -66,8 +67,8 @@ CREATE TABLE IF NOT EXISTS driver.driver_audit_logs
     created_at  TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_driver_profiles_status ON driver.driver_profiles (review_status);
-CREATE INDEX IF NOT EXISTS idx_driver_profiles_available ON driver.driver_profiles (availability_status) WHERE review_status = 'APPROVED';
-CREATE INDEX IF NOT EXISTS idx_driver_vehicles_driver ON driver.vehicles (driver_id);
-CREATE INDEX IF NOT EXISTS idx_driver_documents_driver ON driver.driver_documents (driver_id);
-CREATE INDEX IF NOT EXISTS idx_driver_profiles_user_id ON driver.driver_profiles (user_id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_driver_profiles_status ON driver.driver_profiles (review_status);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_driver_profiles_available ON driver.driver_profiles (availability_status) WHERE review_status = 'APPROVED';
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_driver_vehicles_driver ON driver.vehicles (driver_id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_driver_documents_driver ON driver.driver_documents (driver_id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_driver_profiles_user_id ON driver.driver_profiles (user_id);

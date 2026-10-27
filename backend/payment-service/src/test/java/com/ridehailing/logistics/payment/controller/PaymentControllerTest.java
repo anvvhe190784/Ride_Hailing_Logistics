@@ -6,8 +6,6 @@ import static org.mockito.Mockito.*;
 import com.ridehailing.logistics.common.domain.enums.WalletEntryType;
 import com.ridehailing.logistics.common.dto.ApiResponse;
 import com.ridehailing.logistics.common.exception.BaseDomainException;
-import com.ridehailing.logistics.payment.domain.entity.Wallet;
-import com.ridehailing.logistics.payment.domain.entity.WalletEntry;
 import com.ridehailing.logistics.payment.dto.response.WalletEntryResponse;
 import com.ridehailing.logistics.payment.dto.response.WalletResponse;
 import com.ridehailing.logistics.payment.service.PaymentService;
@@ -35,26 +33,26 @@ class PaymentControllerTest {
   @InjectMocks private PaymentController paymentController;
 
   private UUID driverId;
-  private Wallet wallet;
+  private WalletResponse walletResponse;
 
   @BeforeEach
   void setUp() {
     driverId = UUID.randomUUID();
-    wallet =
-        Wallet.builder()
-            .id(UUID.randomUUID())
-            .driverId(driverId)
-            .balance(new BigDecimal("150000"))
-            .currency("VND")
-            .createdAt(Instant.now())
-            .updatedAt(Instant.now())
-            .build();
+    walletResponse =
+        new WalletResponse(
+            UUID.randomUUID(),
+            driverId,
+            "VND",
+            new BigDecimal("150000"),
+            "ACTIVE",
+            Instant.now(),
+            Instant.now());
   }
 
   @Test
   @DisplayName("DRIVER role should be allowed to view their own wallet")
   void shouldAllowDriverToGetMyWallet() {
-    when(paymentService.getWalletByDriver(driverId)).thenReturn(wallet);
+    when(paymentService.getWalletByDriver(driverId)).thenReturn(walletResponse);
 
     ResponseEntity<ApiResponse<WalletResponse>> response =
         paymentController.getMyWallet(driverId, "DRIVER", "corr-1");
@@ -67,7 +65,7 @@ class PaymentControllerTest {
   @Test
   @DisplayName("ADMIN role should be allowed to view driver wallet")
   void shouldAllowAdminToGetDriverWallet() {
-    when(paymentService.getWalletByDriver(driverId)).thenReturn(wallet);
+    when(paymentService.getWalletByDriver(driverId)).thenReturn(walletResponse);
 
     ResponseEntity<ApiResponse<WalletResponse>> response =
         paymentController.getMyWallet(driverId, "ADMIN", "corr-2");
@@ -92,17 +90,19 @@ class PaymentControllerTest {
   @Test
   @DisplayName("DRIVER role should be allowed to view wallet statement")
   void shouldAllowDriverToGetWalletStatement() {
-    WalletEntry entry =
-        WalletEntry.builder()
-            .id(UUID.randomUUID())
-            .walletId(wallet.getId())
-            .amount(new BigDecimal("50000"))
-            .entryType(WalletEntryType.TRIP_EARNING)
-            .balanceAfter(new BigDecimal("150000"))
-            .description("Trip fare")
-            .createdAt(Instant.now())
-            .build();
-    Page<WalletEntry> page = new PageImpl<>(List.of(entry));
+    WalletEntryResponse entryResponse =
+        new WalletEntryResponse(
+            UUID.randomUUID(),
+            walletResponse.id(),
+            WalletEntryType.TRIP_EARNING,
+            new BigDecimal("50000"),
+            new BigDecimal("150000"),
+            "TRIP",
+            "ref-123",
+            "Trip fare",
+            "POSTED",
+            Instant.now());
+    Page<WalletEntryResponse> page = new PageImpl<>(List.of(entryResponse));
     when(paymentService.getWalletStatement(eq(driverId), any())).thenReturn(page);
 
     ResponseEntity<ApiResponse<Page<WalletEntryResponse>>> response =

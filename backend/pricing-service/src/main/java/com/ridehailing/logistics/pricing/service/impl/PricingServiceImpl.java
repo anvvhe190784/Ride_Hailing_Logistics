@@ -1,5 +1,6 @@
 package com.ridehailing.logistics.pricing.service.impl;
 
+import com.ridehailing.logistics.common.domain.enums.ServiceType;
 import com.ridehailing.logistics.common.dto.FareQuoteResponse;
 import com.ridehailing.logistics.common.exception.BaseDomainException;
 import com.ridehailing.logistics.pricing.domain.entity.FareQuote;
@@ -12,7 +13,10 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadLocalRandom;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.locationtech.jts.geom.Coordinate;
@@ -27,6 +31,12 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class PricingServiceImpl implements PricingService {
 
+  private record CachedPricingRule(PricingRule rule, Instant expiresAt) {}
+  private record CachedQuoteResponse(FareQuoteResponse response, Instant expiresAt) {}
+
+  private final Map<String, CachedPricingRule> pricingRuleCache = new ConcurrentHashMap<>();
+  private final Map<String, CachedQuoteResponse> idempotencyCache = new ConcurrentHashMap<>();
+
   private final PricingRuleRepository pricingRuleRepository;
   private final FareQuoteRepository fareQuoteRepository;
   private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
@@ -34,29 +44,24 @@ public class PricingServiceImpl implements PricingService {
   @Override
   @Transactional
   public FareQuoteResponse createQuote(UUID customerId, FareEstimateRequest request) {
+    return createQuote(customerId, request, null);
+  }
+
+  @Override
+  @Transactional
+  public FareQuoteResponse createQuote(
+      UUID customerId, FareEstimateRequest request, String idempotencyKey) {
+    if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+      CachedQuoteResponse cached = idempotencyCache.get(idempotencyKey);
+      if (cached != null && cached.expiresAt().isAfter(Instant.now())) {
+        log.info("Returning cached fare quote for idempotency key: {}", idempotencyKey);
+        return cached.response();
+      }
+    }
+
     String region = request.regionCode() != null ? request.regionCode() : "HN";
 
-    PricingRule rule =
-        pricingRuleRepository
-            .findActiveRule(request.serviceType(), region, Instant.now())
-            .or(
-                () ->
-                    pricingRuleRepository
-                        .findFirstByServiceTypeAndRegionCodeAndIsActiveTrueOrderByVersionDesc(
-                            request.serviceType(), region))
-            .orElseGet(
-                () ->
-                    PricingRule.builder()
-                        .serviceType(request.serviceType())
-                        .regionCode(region)
-                        .baseFare(new BigDecimal("15000.00"))
-                        .perKmRate(new BigDecimal("10000.00"))
-                        .perMinuteRate(new BigDecimal("1000.00"))
-                        .minimumFare(new BigDecimal("20000.00"))
-                        .version(1)
-                        .effectiveFrom(Instant.now().minus(1, ChronoUnit.DAYS))
-                        .isActive(true)
-                        .build());
+    PricingRule rule = getCachedOrFetchRule(request.serviceType(), region);
 
     // Distance estimation (A-04 fallback: Haversine distance * 1.3 routing factor)
     double distanceMetersRaw =
@@ -110,7 +115,10 @@ public class PricingServiceImpl implements PricingService {
             .currency("VND")
             .ruleVersion(rule.getVersion())
             .expiresAt(
-                Instant.now().plus(10, ChronoUnit.MINUTES)) // 10 mins validity per FR-PRI-013
+                Instant.now()
+                    .plus(
+                        600 + ThreadLocalRandom.current().nextLong(-60, 61),
+                        ChronoUnit.SECONDS)) // 10 mins validity with ±60s jitter against expiry cliff
             .build();
 
     quote = fareQuoteRepository.save(quote);
@@ -120,17 +128,74 @@ public class PricingServiceImpl implements PricingService {
         customerId,
         totalFare);
 
-    return toResponse(quote);
+    FareQuoteResponse response = toResponse(quote);
+    if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+      idempotencyCache.put(
+          idempotencyKey, new CachedQuoteResponse(response, quote.getExpiresAt()));
+    }
+
+    return response;
+  }
+
+  private PricingRule getCachedOrFetchRule(ServiceType serviceType, String region) {
+    String cacheKey = serviceType.name() + ":" + region;
+    Instant now = Instant.now();
+    CachedPricingRule cached = pricingRuleCache.get(cacheKey);
+    if (cached != null && cached.expiresAt().isAfter(now)) {
+      return cached.rule();
+    }
+
+    PricingRule rule =
+        pricingRuleRepository
+            .findActiveRule(serviceType, region, now)
+            .or(
+                () ->
+                    pricingRuleRepository
+                        .findFirstByServiceTypeAndRegionCodeAndIsActiveTrueOrderByVersionDesc(
+                            serviceType, region))
+            .orElseGet(
+                () ->
+                    PricingRule.builder()
+                        .serviceType(serviceType)
+                        .regionCode(region)
+                        .baseFare(new BigDecimal("15000.00"))
+                        .perKmRate(new BigDecimal("10000.00"))
+                        .perMinuteRate(new BigDecimal("1000.00"))
+                        .minimumFare(new BigDecimal("20000.00"))
+                        .version(1)
+                        .effectiveFrom(now.minus(1, ChronoUnit.DAYS))
+                        .isActive(true)
+                        .build());
+
+    // 5-minute TTL with ±30s randomized jitter
+    long ttlSeconds = 300L + ThreadLocalRandom.current().nextLong(-30, 31);
+    pricingRuleCache.put(
+        cacheKey, new CachedPricingRule(rule, now.plus(ttlSeconds, ChronoUnit.SECONDS)));
+    return rule;
   }
 
   @Override
   @Transactional(readOnly = true)
   public FareQuoteResponse getQuote(UUID quoteId) {
+    return getQuote(quoteId, null, null);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public FareQuoteResponse getQuote(UUID quoteId, UUID requesterId, String requesterRole) {
     FareQuote quote =
         fareQuoteRepository
             .findById(quoteId)
             .orElseThrow(
                 () -> BaseDomainException.notFound("QUOTE_NOT_FOUND", "Fare quote not found"));
+
+    if (requesterId != null
+        && !"ADMIN".equalsIgnoreCase(requesterRole)
+        && !quote.getCustomerId().equals(requesterId)) {
+      throw BaseDomainException.forbidden(
+          "FORBIDDEN_ACCESS", "You do not have permission to view this fare quote");
+    }
+
     return toResponse(quote);
   }
 

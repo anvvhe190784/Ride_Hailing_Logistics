@@ -12,6 +12,7 @@ import com.ridehailing.logistics.iam.service.AuthService;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -54,10 +55,15 @@ public class AuthController {
   @PostMapping("/logout")
   public ResponseEntity<ApiResponse<Void>> logout(
       @Valid @RequestBody LogoutRequest request,
+      @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader,
       @RequestHeader(value = SecurityConstants.HEADER_CORRELATION_ID, required = false)
           String correlationId) {
-    authService.logout(request);
+    authService.logout(request, authHeader);
     return ResponseEntity.ok(ApiResponse.success(null, correlationId));
+  }
+
+  public ResponseEntity<ApiResponse<Void>> logout(LogoutRequest request, String correlationId) {
+    return logout(request, null, correlationId);
   }
 
   @GetMapping("/me")

@@ -6,7 +6,6 @@ import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import java.nio.charset.StandardCharsets;
-import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Date;
 import java.util.UUID;
@@ -16,13 +15,8 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class JwtTokenProvider {
 
-  private static final String DEFAULT_EPHEMERAL_SECRET;
-
-  static {
-    byte[] randomBytes = new byte[32];
-    new SecureRandom().nextBytes(randomBytes);
-    DEFAULT_EPHEMERAL_SECRET = java.util.HexFormat.of().formatHex(randomBytes);
-  }
+  public static final String DEFAULT_DEV_SECRET =
+      "ride-hailing-logistics-deterministic-dev-jwt-secret-key-2026-hmac-sha256";
 
   private final SecretKey secretKey;
   private final long accessTokenValiditySeconds;
@@ -63,10 +57,11 @@ public class JwtTokenProvider {
     }
     log.warn(
         "No JWT secret configured via environment variable '{}' or system property '{}'. "
-            + "Using secure JVM-ephemeral secret.",
+            + "Using deterministic fallback secret for development/testing profiles. "
+            + "DO NOT USE THIS FALLBACK IN PRODUCTION!",
         SecurityConstants.JWT_SECRET_ENV,
         SecurityConstants.JWT_SECRET_PROPERTY);
-    return DEFAULT_EPHEMERAL_SECRET;
+    return DEFAULT_DEV_SECRET;
   }
 
   public String generateAccessToken(UUID userId, String phone, UserRole role) {
@@ -74,6 +69,7 @@ public class JwtTokenProvider {
     Instant expiry = now.plusSeconds(accessTokenValiditySeconds);
 
     return Jwts.builder()
+        .id(UUID.randomUUID().toString())
         .subject(userId.toString())
         .claim(SecurityConstants.CLAIM_PHONE, phone)
         .claim(SecurityConstants.CLAIM_ROLE, role.name())
@@ -129,5 +125,16 @@ public class JwtTokenProvider {
 
   public String getPhoneFromToken(String token) {
     return parseClaims(token).get(SecurityConstants.CLAIM_PHONE, String.class);
+  }
+
+  public String extractJti(Claims claims) {
+    return claims != null ? claims.getId() : null;
+  }
+
+  public Instant extractExpiration(Claims claims) {
+    if (claims == null || claims.getExpiration() == null) {
+      return null;
+    }
+    return claims.getExpiration().toInstant();
   }
 }

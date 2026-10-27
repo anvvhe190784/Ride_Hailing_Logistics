@@ -34,7 +34,7 @@ public class User {
   @Column(name = "full_name", nullable = false, length = 100)
   private String fullName;
 
-  @Column(name = "avatar_url")
+  @Column(name = "avatar_url", length = 500)
   private String avatarUrl;
 
   @Enumerated(EnumType.STRING)
@@ -45,6 +45,13 @@ public class User {
   @Column(nullable = false, length = 32)
   @Builder.Default
   private AccountStatus status = AccountStatus.ACTIVE;
+
+  @Column(name = "failed_login_attempts", nullable = false)
+  @Builder.Default
+  private int failedLoginAttempts = 0;
+
+  @Column(name = "locked_until")
+  private Instant lockedUntil;
 
   @CreationTimestamp
   @Column(name = "created_at", nullable = false, updatable = false)

@@ -1,5 +1,7 @@
 package com.ridehailing.logistics.trip.event;
 
+import com.ridehailing.logistics.trip.repository.OutboxEventRepository;
+import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -12,12 +14,40 @@ import org.springframework.transaction.event.TransactionalEventListener;
 public class TripAfterCommitEventListener {
 
   private final TripEventProducer eventProducer;
+  private final OutboxEventRepository outboxEventRepository;
 
   @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
   public void handleTripCompleted(TripCompletedInternalEvent event) {
     log.info(
         "Handling TripCompletedInternalEvent AFTER_COMMIT for trip ID: {}",
-        event.trip().getId());
-    eventProducer.publishTripCompleted(event.trip());
+        event.tripId());
+    eventProducer.publishTripCompleted(
+        event.trip(),
+        () -> {
+          int updated =
+              outboxEventRepository.markEventAsProcessed(
+                  event.tripId().toString(), "TripCompletedEvent", Instant.now());
+          if (updated == 0) {
+            updated =
+                outboxEventRepository.markEventAsProcessed(
+                    event.tripId().toString(), "TripCompleted", Instant.now());
+          }
+          if (updated > 0) {
+            log.info("Marked OutboxEvent PROCESSED after commit for trip ID {}", event.tripId());
+          } else {
+            outboxEventRepository
+                .findFirstByAggregateIdAndEventTypeAndStatus(
+                    event.tripId().toString(), "TripCompleted", "PENDING")
+                .ifPresent(
+                    outbox -> {
+                      outbox.setStatus("PROCESSED");
+                      outbox.setProcessedAt(Instant.now());
+                      outboxEventRepository.save(outbox);
+                      log.info(
+                          "Marked OutboxEvent PROCESSED via fallback for trip ID {}",
+                          event.tripId());
+                    });
+          }
+        });
   }
 }

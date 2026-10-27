@@ -15,9 +15,19 @@ public interface TripService {
 
   DriverOfferResponse respondOffer(UUID offerId, UUID driverId, boolean accept);
 
-  TripDetailResponse updateTripStatus(UUID tripId, UUID actorId, TripStatus nextStatus);
+  default TripDetailResponse updateTripStatus(UUID tripId, UUID actorId, TripStatus nextStatus) {
+    return updateTripStatus(tripId, actorId, null, nextStatus);
+  }
 
-  Trip updateTripStatusInDb(UUID tripId, UUID actorId, TripStatus nextStatus);
+  TripDetailResponse updateTripStatus(
+      UUID tripId, UUID actorId, String actorRole, TripStatus nextStatus);
+
+  default Trip updateTripStatusInDb(UUID tripId, UUID actorId, TripStatus nextStatus) {
+    return updateTripStatusInDb(tripId, actorId, null, nextStatus);
+  }
+
+  Trip updateTripStatusInDb(
+      UUID tripId, UUID actorId, String actorRole, TripStatus nextStatus);
 
   TripDetailResponse getTrip(UUID tripId);
 }

@@ -1,9 +1,12 @@
 server:
   port: 8761
+  shutdown: graceful
 
 spring:
   application:
     name: discovery-service
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
   threads:
     virtual:
       enabled: true
