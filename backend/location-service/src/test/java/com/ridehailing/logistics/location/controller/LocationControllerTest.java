@@ -87,6 +87,7 @@ class LocationControllerTest {
         controller.getNearbyDrivers(21.028511, 105.854444, 3000.0, 10, "corr-2");
 
     assertNotNull(response);
+    assertNotNull(response.getBody());
     assertEquals(200, response.getStatusCode().value());
     assertEquals(1, response.getBody().getData().size());
   }

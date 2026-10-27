@@ -58,6 +58,7 @@ class PaymentControllerTest {
         paymentController.getMyWallet(driverId, "DRIVER", "corr-1");
 
     assertNotNull(response);
+    assertNotNull(response.getBody());
     assertEquals(200, response.getStatusCode().value());
     assertEquals(new BigDecimal("150000"), response.getBody().getData().balance());
   }
@@ -109,6 +110,7 @@ class PaymentControllerTest {
         paymentController.getMyWalletStatement(driverId, "DRIVER", PageRequest.of(0, 10), "corr-4");
 
     assertNotNull(response);
+    assertNotNull(response.getBody());
     assertEquals(200, response.getStatusCode().value());
     assertEquals(1, response.getBody().getData().getTotalElements());
   }
