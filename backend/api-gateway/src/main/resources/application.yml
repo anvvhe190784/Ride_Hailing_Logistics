@@ -40,7 +40,8 @@ spring:
               - DELETE
               - OPTIONS
               - PATCH
-            allowedHeaders: "*"
+            allowedHeaders:
+              - "*"
             allowCredentials: true
             maxAge: 3600
       discovery:
@@ -98,9 +99,12 @@ management:
         enabled: true
       group:
         liveness:
-          include: livenessState
+          include:
+            - livenessState
         readiness:
-          include: readinessState,ping
+          include:
+            - readinessState
+            - ping
   endpoints:
     web:
       exposure:

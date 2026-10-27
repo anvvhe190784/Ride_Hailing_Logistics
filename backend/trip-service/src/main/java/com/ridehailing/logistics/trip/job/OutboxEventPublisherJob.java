@@ -41,9 +41,7 @@ public class OutboxEventPublisherJob {
 
     for (OutboxEvent event : pendingEvents) {
       try {
-        boolean isTripCompleted =
-            "TripCompleted".equals(event.getEventType())
-                || "TripCompletedEvent".equals(event.getEventType());
+        boolean isTripCompleted = "TripCompleted".equals(event.getEventType());
         String topic =
             isTripCompleted
                 ? TripEventProducer.TOPIC_TRIP_COMPLETED

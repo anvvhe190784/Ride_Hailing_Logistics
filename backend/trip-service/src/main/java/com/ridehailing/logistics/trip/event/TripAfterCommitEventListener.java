@@ -26,12 +26,7 @@ public class TripAfterCommitEventListener {
         () -> {
           int updated =
               outboxEventRepository.markEventAsProcessed(
-                  event.tripId().toString(), "TripCompletedEvent", Instant.now());
-          if (updated == 0) {
-            updated =
-                outboxEventRepository.markEventAsProcessed(
-                    event.tripId().toString(), "TripCompleted", Instant.now());
-          }
+                  event.tripId().toString(), "TripCompleted", Instant.now());
           if (updated > 0) {
             log.info("Marked OutboxEvent PROCESSED after commit for trip ID {}", event.tripId());
           } else {

@@ -74,9 +74,14 @@ management:
         enabled: true
       group:
         liveness:
-          include: livenessState
+          include:
+            - livenessState
         readiness:
-          include: readinessState,db,diskSpace,ping
+          include:
+            - readinessState
+            - db
+            - diskSpace
+            - ping
   endpoints:
     web:
       exposure:

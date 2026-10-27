@@ -53,12 +53,12 @@ class TripAfterCommitEventListenerTest {
         .publishTripCompleted(eq(trip), any());
 
     when(outboxEventRepository.markEventAsProcessed(
-            eq(tripId.toString()), eq("TripCompletedEvent"), any(Instant.class)))
+            eq(tripId.toString()), eq("TripCompleted"), any(Instant.class)))
         .thenReturn(1);
 
     listener.handleTripCompleted(event);
 
     verify(outboxEventRepository, times(1))
-        .markEventAsProcessed(eq(tripId.toString()), eq("TripCompletedEvent"), any(Instant.class));
+        .markEventAsProcessed(eq(tripId.toString()), eq("TripCompleted"), any(Instant.class));
   }
 }
