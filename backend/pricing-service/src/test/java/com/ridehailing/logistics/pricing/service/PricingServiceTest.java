@@ -2,8 +2,11 @@ package com.ridehailing.logistics.pricing.service;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ridehailing.logistics.common.domain.enums.ServiceType;
 import com.ridehailing.logistics.common.dto.FareQuoteResponse;
 import com.ridehailing.logistics.common.exception.BaseDomainException;
@@ -14,31 +17,41 @@ import com.ridehailing.logistics.pricing.repository.FareQuoteRepository;
 import com.ridehailing.logistics.pricing.repository.PricingRuleRepository;
 import com.ridehailing.logistics.pricing.service.impl.PricingServiceImpl;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 
 @ExtendWith(MockitoExtension.class)
 class PricingServiceTest {
 
   @Mock private PricingRuleRepository pricingRuleRepository;
-
   @Mock private FareQuoteRepository fareQuoteRepository;
+  @Mock private StringRedisTemplate redisTemplate;
+  @Mock private ValueOperations<String, String> valueOperations;
 
-  @InjectMocks private PricingServiceImpl pricingService;
+  private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+  private PricingServiceImpl pricingService;
 
   private PricingRule mockRule;
 
   @BeforeEach
   void setUp() {
+    lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+    pricingService =
+        new PricingServiceImpl(
+            pricingRuleRepository, fareQuoteRepository, redisTemplate, objectMapper);
+
     mockRule =
         PricingRule.builder()
             .id(UUID.randomUUID())
@@ -109,6 +122,62 @@ class PricingServiceTest {
     verify(pricingRuleRepository, times(1))
         .findFirstByServiceTypeAndRegionCodeAndIsActiveTrueOrderByVersionDesc(
             ServiceType.RIDE, "HN");
+    verify(fareQuoteRepository, times(1)).save(any(FareQuote.class));
+    verify(valueOperations, times(1))
+        .set(
+            eq(PricingServiceImpl.REDIS_RULE_CACHE_PREFIX + "RIDE:HN"),
+            anyString(),
+            eq(Duration.ofMinutes(5)));
+  }
+
+  @Test
+  @DisplayName("should use cached pricing rule from Redis without hitting repository")
+  void shouldReturnCachedPricingRuleFromRedis() throws Exception {
+    UUID customerId = UUID.randomUUID();
+    FareEstimateRequest request =
+        new FareEstimateRequest(
+            ServiceType.RIDE,
+            "HN",
+            21.028511,
+            105.804817,
+            "Hanoi Opera House",
+            21.036237,
+            105.834641,
+            "West Lake Hanoi");
+
+    String redisRuleKey = PricingServiceImpl.REDIS_RULE_CACHE_PREFIX + "RIDE:HN";
+    String ruleJson = objectMapper.writeValueAsString(mockRule);
+    when(valueOperations.get(redisRuleKey)).thenReturn(ruleJson);
+
+    when(fareQuoteRepository.save(any(FareQuote.class)))
+        .thenAnswer(
+            invocation -> {
+              FareQuote saved = invocation.getArgument(0);
+              return FareQuote.builder()
+                  .id(UUID.randomUUID())
+                  .customerId(saved.getCustomerId())
+                  .serviceType(saved.getServiceType())
+                  .pickupPoint(saved.getPickupPoint())
+                  .pickupAddress(saved.getPickupAddress())
+                  .dropoffPoint(saved.getDropoffPoint())
+                  .dropoffAddress(saved.getDropoffAddress())
+                  .estimatedDistanceMeters(saved.getEstimatedDistanceMeters())
+                  .estimatedDurationSeconds(saved.getEstimatedDurationSeconds())
+                  .basePrice(saved.getBasePrice())
+                  .distancePrice(saved.getDistancePrice())
+                  .durationPrice(saved.getDurationPrice())
+                  .surgeMultiplier(saved.getSurgeMultiplier())
+                  .totalFare(saved.getTotalFare())
+                  .currency(saved.getCurrency())
+                  .ruleVersion(saved.getRuleVersion())
+                  .expiresAt(saved.getExpiresAt())
+                  .build();
+            });
+
+    FareQuoteResponse response = pricingService.createQuote(customerId, request);
+
+    assertNotNull(response);
+    verifyNoInteractions(pricingRuleRepository);
     verify(fareQuoteRepository, times(1)).save(any(FareQuote.class));
   }
 
@@ -321,7 +390,7 @@ class PricingServiceTest {
   }
 
   @Test
-  @DisplayName("should deduplicate quote creation when using same idempotency key")
+  @DisplayName("should deduplicate quote creation when using same idempotency key via Redis")
   void shouldDeduplicateCreateQuoteWithSameIdempotencyKey() {
     UUID customerId = UUID.randomUUID();
     FareEstimateRequest request =
@@ -365,12 +434,78 @@ class PricingServiceTest {
             });
 
     String idempotencyKey = "TEST-IDEMP-" + UUID.randomUUID();
+    String redisQuoteKey = PricingServiceImpl.REDIS_QUOTE_IDEMPOTENCY_PREFIX + idempotencyKey;
+
+    AtomicReference<String> redisStore = new AtomicReference<>();
+    when(valueOperations.get(redisQuoteKey)).thenAnswer(inv -> redisStore.get());
+    doAnswer(
+            inv -> {
+              redisStore.set(inv.getArgument(1));
+              return null;
+            })
+        .when(valueOperations)
+        .set(eq(redisQuoteKey), anyString(), eq(Duration.ofMinutes(10)));
+
     FareQuoteResponse first = pricingService.createQuote(customerId, request, idempotencyKey);
     FareQuoteResponse second = pricingService.createQuote(customerId, request, idempotencyKey);
 
     assertNotNull(first);
     assertNotNull(second);
     assertEquals(first.quoteId(), second.quoteId());
+    assertEquals(first.totalFare(), second.totalFare());
     verify(fareQuoteRepository, times(1)).save(any(FareQuote.class));
+    verify(valueOperations, times(1))
+        .set(eq(redisQuoteKey), anyString(), eq(Duration.ofMinutes(10)));
+  }
+
+  @Test
+  @DisplayName("should return cached quote directly when idempotency key already exists in Redis")
+  void shouldReturnCachedQuoteWhenIdempotencyKeyHitInRedis() throws Exception {
+    UUID customerId = UUID.randomUUID();
+    UUID quoteId = UUID.randomUUID();
+    FareEstimateRequest request =
+        new FareEstimateRequest(
+            ServiceType.RIDE,
+            "HN",
+            21.028511,
+            105.804817,
+            "Hanoi Opera House",
+            21.036237,
+            105.834641,
+            "West Lake Hanoi");
+
+    FareQuoteResponse cachedResponse =
+        new FareQuoteResponse(
+            quoteId,
+            customerId,
+            ServiceType.RIDE,
+            "Hanoi Opera House",
+            "West Lake Hanoi",
+            5000,
+            600,
+            new BigDecimal("15000.00"),
+            new BigDecimal("50000.00"),
+            new BigDecimal("10000.00"),
+            BigDecimal.ONE,
+            new BigDecimal("75000.00"),
+            "VND",
+            1,
+            Instant.now().plus(10, ChronoUnit.MINUTES),
+            21.028511,
+            105.804817,
+            21.036237,
+            105.834641);
+
+    String idempotencyKey = "EXISTING-KEY";
+    String redisQuoteKey = PricingServiceImpl.REDIS_QUOTE_IDEMPOTENCY_PREFIX + idempotencyKey;
+    when(valueOperations.get(redisQuoteKey)).thenReturn(objectMapper.writeValueAsString(cachedResponse));
+
+    FareQuoteResponse response = pricingService.createQuote(customerId, request, idempotencyKey);
+
+    assertNotNull(response);
+    assertEquals(quoteId, response.quoteId());
+    assertEquals(new BigDecimal("75000.00"), response.totalFare());
+    verifyNoInteractions(pricingRuleRepository);
+    verifyNoInteractions(fareQuoteRepository);
   }
 }

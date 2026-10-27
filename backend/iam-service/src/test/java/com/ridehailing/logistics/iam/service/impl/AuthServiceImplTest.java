@@ -41,16 +41,15 @@ class AuthServiceImplTest {
   @Mock private UserMapper userMapper;
   @Mock private PasswordEncoder passwordEncoder;
   @Mock private AuditLogRepository auditLogRepository;
+  @Mock private TokenBlacklistService tokenBlacklistService;
 
   private JwtTokenProvider jwtTokenProvider;
-  private TokenBlacklistService tokenBlacklistService;
   private AuthServiceImpl authService;
 
   @BeforeEach
   void setUp() {
     jwtTokenProvider =
         new JwtTokenProvider("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
-    tokenBlacklistService = new TokenBlacklistService();
     authService =
         new AuthServiceImpl(
             userRepository,
@@ -190,8 +189,8 @@ class AuthServiceImplTest {
 
     authService.logout(logoutRequest, "Bearer " + accessToken);
 
-    assertTrue(tokenBlacklistService.isBlacklisted(accessToken));
-    assertTrue(tokenBlacklistService.isBlacklisted(jti));
+    verify(tokenBlacklistService).blacklistToken(eq(accessToken), any());
+    verify(tokenBlacklistService).blacklistToken(eq(jti), any());
     verify(auditLogRepository).save(any(AuditLog.class));
   }
 

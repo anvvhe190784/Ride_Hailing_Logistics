@@ -5,10 +5,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ridehailing.logistics.common.dto.ApiResponse;
 import com.ridehailing.logistics.common.security.SecurityConstants;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -16,6 +15,7 @@ import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
 import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.server.reactive.ServerHttpRequest;
@@ -28,6 +28,8 @@ import reactor.core.publisher.Mono;
 @Component
 public class RateLimitingGatewayFilter implements GlobalFilter, Ordered {
 
+  public static final String REDIS_RATE_LIMIT_PREFIX = "ratelimit:gateway:";
+
   private static final List<String> RATE_LIMITED_PREFIXES =
       List.of("/api/v1/auth", "/api/v1/trips", "/api/v1/pricing");
 
@@ -35,17 +37,25 @@ public class RateLimitingGatewayFilter implements GlobalFilter, Ordered {
   private final double replenishRate;
   private final double burstCapacity;
   private final ObjectMapper objectMapper;
-  private final Map<String, TokenBucket> buckets = new ConcurrentHashMap<>();
+  private final StringRedisTemplate redisTemplate;
 
   public RateLimitingGatewayFilter() {
-    this(true, 50.0, 100.0, new ObjectMapper());
+    this(true, 50.0, 100.0, new ObjectMapper(), null);
   }
 
   public RateLimitingGatewayFilter(
       @Value("${app.gateway.rate-limit.enabled:true}") boolean enabled,
       @Value("${app.gateway.rate-limit.replenish-rate:50}") double replenishRate,
       @Value("${app.gateway.rate-limit.burst-capacity:100}") double burstCapacity) {
-    this(enabled, replenishRate, burstCapacity, new ObjectMapper());
+    this(enabled, replenishRate, burstCapacity, new ObjectMapper(), null);
+  }
+
+  public RateLimitingGatewayFilter(
+      boolean enabled,
+      double replenishRate,
+      double burstCapacity,
+      ObjectMapper objectMapper) {
+    this(enabled, replenishRate, burstCapacity, objectMapper, null);
   }
 
   @Autowired
@@ -53,11 +63,13 @@ public class RateLimitingGatewayFilter implements GlobalFilter, Ordered {
       @Value("${app.gateway.rate-limit.enabled:true}") boolean enabled,
       @Value("${app.gateway.rate-limit.replenish-rate:50}") double replenishRate,
       @Value("${app.gateway.rate-limit.burst-capacity:100}") double burstCapacity,
-      @Autowired(required = false) ObjectMapper objectMapper) {
+      @Autowired(required = false) ObjectMapper objectMapper,
+      @Autowired(required = false) StringRedisTemplate redisTemplate) {
     this.enabled = enabled;
     this.replenishRate = replenishRate;
     this.burstCapacity = burstCapacity;
     this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
+    this.redisTemplate = redisTemplate;
   }
 
   @Override
@@ -72,14 +84,24 @@ public class RateLimitingGatewayFilter implements GlobalFilter, Ordered {
     }
 
     String clientKey = resolveClientKey(exchange.getRequest());
-    TokenBucket bucket = buckets.computeIfAbsent(clientKey, k -> new TokenBucket(burstCapacity));
-
-    if (bucket.tryConsume(replenishRate, burstCapacity)) {
+    if (tryConsume(clientKey)) {
       return chain.filter(exchange);
     }
 
     log.warn("Rate limit exceeded for client key: {} on path: {}", clientKey, path);
     return handleRateLimitExceeded(exchange);
+  }
+
+  public boolean tryConsume(String clientIp) {
+    if (redisTemplate == null) {
+      return true;
+    }
+    String key = REDIS_RATE_LIMIT_PREFIX + clientIp;
+    Long currentCount = redisTemplate.opsForValue().increment(key);
+    if (currentCount != null && currentCount == 1L) {
+      redisTemplate.expire(key, Duration.ofSeconds(60));
+    }
+    return currentCount == null || currentCount <= (long) burstCapacity;
   }
 
   private boolean isRateLimitedPath(String path) {
@@ -145,31 +167,5 @@ public class RateLimitingGatewayFilter implements GlobalFilter, Ordered {
   @Override
   public int getOrder() {
     return -2; // Runs after JWT Authentication filter (-100) and before route forwarding
-  }
-
-  /** High-performance token bucket for sliding-window rate limiting. */
-  static class TokenBucket {
-    private double tokens;
-    private long lastRefillNanos;
-
-    TokenBucket(double initialTokens) {
-      this.tokens = initialTokens;
-      this.lastRefillNanos = System.nanoTime();
-    }
-
-    synchronized boolean tryConsume(double replenishRate, double maxCapacity) {
-      long now = System.nanoTime();
-      double elapsedSeconds = (now - lastRefillNanos) / 1_000_000_000.0;
-      if (elapsedSeconds > 0) {
-        tokens = Math.min(maxCapacity, tokens + (elapsedSeconds * replenishRate));
-        lastRefillNanos = now;
-      }
-
-      if (tokens >= 1.0) {
-        tokens -= 1.0;
-        return true;
-      }
-      return false;
-    }
   }
 }

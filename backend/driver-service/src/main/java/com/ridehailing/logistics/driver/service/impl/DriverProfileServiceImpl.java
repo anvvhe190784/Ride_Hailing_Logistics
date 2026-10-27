@@ -1,5 +1,6 @@
 package com.ridehailing.logistics.driver.service.impl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ridehailing.logistics.common.domain.enums.DriverAvailabilityStatus;
 import com.ridehailing.logistics.common.domain.enums.DriverReviewStatus;
 import com.ridehailing.logistics.common.domain.enums.VehicleStatus;
@@ -14,13 +15,13 @@ import com.ridehailing.logistics.driver.mapper.DriverMapper;
 import com.ridehailing.logistics.driver.repository.DriverProfileRepository;
 import com.ridehailing.logistics.driver.repository.VehicleRepository;
 import com.ridehailing.logistics.driver.service.DriverProfileService;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,21 +30,15 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class DriverProfileServiceImpl implements DriverProfileService {
 
+  public static final String REDIS_PROFILE_CACHE_PREFIX = "cache:driver:profile:";
   private static final String ERR_DRIVER_NOT_FOUND = "DRIVER_NOT_FOUND";
   private static final String MSG_DRIVER_NOT_FOUND = "Driver profile not found";
-  private static final long PROFILE_CACHE_TTL_MS = 60_000L;
-
-  private record CachedProfile(DriverProfileResponse response, long expireAtMillis) {
-    boolean isExpired() {
-      return System.currentTimeMillis() > expireAtMillis;
-    }
-  }
-
-  private final Map<UUID, CachedProfile> profileCache = new ConcurrentHashMap<>();
 
   private final DriverProfileRepository driverProfileRepository;
   private final VehicleRepository vehicleRepository;
   private final DriverMapper driverMapper;
+  private final StringRedisTemplate redisTemplate;
+  private final ObjectMapper objectMapper;
 
   @Override
   @Transactional
@@ -60,7 +55,13 @@ public class DriverProfileServiceImpl implements DriverProfileService {
     profile.setReviewStatus(DriverReviewStatus.PENDING_REVIEW);
 
     profile = driverProfileRepository.save(profile);
-    profileCache.remove(driverId);
+    if (redisTemplate != null) {
+      try {
+        redisTemplate.delete(REDIS_PROFILE_CACHE_PREFIX + driverId);
+      } catch (Exception e) {
+        log.warn("Failed to evict driver profile from Redis cache for driverId {}: {}", driverId, e.getMessage());
+      }
+    }
     log.info("Driver ID {} submitted KYC, status set to PENDING_REVIEW", driverId);
     return driverMapper.toResponse(profile);
   }
@@ -80,7 +81,13 @@ public class DriverProfileServiceImpl implements DriverProfileService {
     profile.setStatusReason("Verified successfully by reviewer");
 
     profile = driverProfileRepository.save(profile);
-    profileCache.remove(driverId);
+    if (redisTemplate != null) {
+      try {
+        redisTemplate.delete(REDIS_PROFILE_CACHE_PREFIX + driverId);
+      } catch (Exception e) {
+        log.warn("Failed to evict driver profile from Redis cache for driverId {}: {}", driverId, e.getMessage());
+      }
+    }
     log.info("Driver ID {} approved by Reviewer ID {}", driverId, reviewerId);
     return driverMapper.toResponse(profile);
   }
@@ -111,7 +118,13 @@ public class DriverProfileServiceImpl implements DriverProfileService {
 
     profile.setAvailabilityStatus(status);
     profile = driverProfileRepository.save(profile);
-    profileCache.remove(driverId);
+    if (redisTemplate != null) {
+      try {
+        redisTemplate.delete(REDIS_PROFILE_CACHE_PREFIX + driverId);
+      } catch (Exception e) {
+        log.warn("Failed to evict driver profile from Redis cache for driverId {}: {}", driverId, e.getMessage());
+      }
+    }
     log.info("Driver ID {} updated availability to {}", driverId, status);
     return driverMapper.toResponse(profile);
   }
@@ -119,18 +132,33 @@ public class DriverProfileServiceImpl implements DriverProfileService {
   @Override
   @Transactional(readOnly = true)
   public DriverProfileResponse getProfile(UUID driverId) {
-    CachedProfile cached = profileCache.get(driverId);
-    if (cached != null && !cached.isExpired()) {
-      return cached.response();
+    String cacheKey = REDIS_PROFILE_CACHE_PREFIX + driverId;
+    if (redisTemplate != null) {
+      try {
+        String cachedJson = redisTemplate.opsForValue().get(cacheKey);
+        if (cachedJson != null) {
+          return objectMapper.readValue(cachedJson, DriverProfileResponse.class);
+        }
+      } catch (Exception e) {
+        log.warn("Failed to read driver profile from Redis cache for driverId {}: {}", driverId, e.getMessage());
+      }
     }
+
     DriverProfile profile =
         driverProfileRepository
             .findById(driverId)
             .orElseThrow(
                 () -> BaseDomainException.notFound(ERR_DRIVER_NOT_FOUND, MSG_DRIVER_NOT_FOUND));
     DriverProfileResponse response = driverMapper.toResponse(profile);
-    profileCache.put(
-        driverId, new CachedProfile(response, System.currentTimeMillis() + PROFILE_CACHE_TTL_MS));
+
+    if (redisTemplate != null) {
+      try {
+        redisTemplate.opsForValue().set(cacheKey, objectMapper.writeValueAsString(response), Duration.ofSeconds(300));
+      } catch (Exception e) {
+        log.warn("Failed to write driver profile to Redis cache for driverId {}: {}", driverId, e.getMessage());
+      }
+    }
+
     return response;
   }
 

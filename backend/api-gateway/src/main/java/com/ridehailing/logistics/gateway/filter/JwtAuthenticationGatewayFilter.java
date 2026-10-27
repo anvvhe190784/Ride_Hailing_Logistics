@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpRequest;
@@ -35,16 +36,27 @@ public class JwtAuthenticationGatewayFilter implements GlobalFilter, Ordered {
   private final TokenBlacklistService tokenBlacklistService;
 
   public JwtAuthenticationGatewayFilter(@Value("${app.security.jwt.secret:}") String jwtSecret) {
-    this(jwtSecret, new TokenBlacklistService());
+    this(jwtSecret, null, null);
+  }
+
+  public JwtAuthenticationGatewayFilter(
+      String jwtSecret, TokenBlacklistService tokenBlacklistService) {
+    this(jwtSecret, tokenBlacklistService, null);
   }
 
   @Autowired
   public JwtAuthenticationGatewayFilter(
       @Value("${app.security.jwt.secret:}") String jwtSecret,
-      @Autowired(required = false) TokenBlacklistService tokenBlacklistService) {
+      @Autowired(required = false) TokenBlacklistService tokenBlacklistService,
+      @Autowired(required = false) StringRedisTemplate redisTemplate) {
     this.jwtTokenProvider = new JwtTokenProvider(jwtSecret);
-    this.tokenBlacklistService =
-        tokenBlacklistService != null ? tokenBlacklistService : new TokenBlacklistService();
+    if (tokenBlacklistService != null) {
+      this.tokenBlacklistService = tokenBlacklistService;
+    } else if (redisTemplate != null) {
+      this.tokenBlacklistService = new TokenBlacklistService(redisTemplate);
+    } else {
+      this.tokenBlacklistService = new TokenBlacklistService();
+    }
   }
 
   @Override

@@ -33,7 +33,7 @@ class JwtAuthenticationGatewayFilterTest {
 
   @BeforeEach
   void setUp() {
-    tokenBlacklistService = new TokenBlacklistService();
+    tokenBlacklistService = mock(TokenBlacklistService.class);
     filter = new JwtAuthenticationGatewayFilter(TEST_SECRET, tokenBlacklistService);
     jwtTokenProvider = new JwtTokenProvider(TEST_SECRET);
   }
@@ -126,7 +126,7 @@ class JwtAuthenticationGatewayFilterTest {
   void shouldReturnUnauthorizedWhenTokenIsBlacklisted() {
     UUID userId = UUID.randomUUID();
     String validToken = jwtTokenProvider.generateAccessToken(userId, "+84912345678", UserRole.CUSTOMER);
-    tokenBlacklistService.blacklistToken(validToken, Instant.now().plusSeconds(600));
+    when(tokenBlacklistService.isBlacklisted(validToken)).thenReturn(true);
 
     MockServerHttpRequest request =
         MockServerHttpRequest.get("/api/v1/drivers/me")
@@ -146,7 +146,7 @@ class JwtAuthenticationGatewayFilterTest {
     UUID userId = UUID.randomUUID();
     String validToken = jwtTokenProvider.generateAccessToken(userId, "+84912345678", UserRole.CUSTOMER);
     Claims claims = jwtTokenProvider.parseClaims(validToken);
-    tokenBlacklistService.blacklistToken(claims.getId(), Instant.now().plusSeconds(600));
+    when(tokenBlacklistService.isBlacklisted(claims.getId())).thenReturn(true);
 
     MockServerHttpRequest request =
         MockServerHttpRequest.get("/api/v1/drivers/me")

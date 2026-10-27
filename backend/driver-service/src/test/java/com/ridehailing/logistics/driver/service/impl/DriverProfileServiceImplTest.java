@@ -2,8 +2,12 @@ package com.ridehailing.logistics.driver.service.impl;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.ridehailing.logistics.common.domain.enums.DriverAvailabilityStatus;
 import com.ridehailing.logistics.common.domain.enums.DriverReviewStatus;
 import com.ridehailing.logistics.common.domain.enums.VehicleStatus;
@@ -12,9 +16,12 @@ import com.ridehailing.logistics.common.dto.DriverProfileResponse;
 import com.ridehailing.logistics.common.exception.BaseDomainException;
 import com.ridehailing.logistics.driver.domain.entity.DriverProfile;
 import com.ridehailing.logistics.driver.domain.entity.Vehicle;
+import com.ridehailing.logistics.driver.dto.request.DriverKycRequest;
 import com.ridehailing.logistics.driver.mapper.DriverMapper;
 import com.ridehailing.logistics.driver.repository.DriverProfileRepository;
 import com.ridehailing.logistics.driver.repository.VehicleRepository;
+import java.time.Duration;
+import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -24,19 +31,32 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 
 @ExtendWith(MockitoExtension.class)
-class DriverProfileServiceImplTest {
+public class DriverProfileServiceImplTest {
 
   @Mock private DriverProfileRepository driverProfileRepository;
   @Mock private VehicleRepository vehicleRepository;
   @Mock private DriverMapper driverMapper;
+  @Mock private StringRedisTemplate redisTemplate;
+  @Mock private ValueOperations<String, String> valueOperations;
 
+  private ObjectMapper objectMapper;
   private DriverProfileServiceImpl service;
 
   @BeforeEach
   void setUp() {
-    service = new DriverProfileServiceImpl(driverProfileRepository, vehicleRepository, driverMapper);
+    objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
+    lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+    service =
+        new DriverProfileServiceImpl(
+            driverProfileRepository,
+            vehicleRepository,
+            driverMapper,
+            redisTemplate,
+            objectMapper);
   }
 
   @Test
@@ -61,20 +81,23 @@ class DriverProfileServiceImplTest {
     when(driverProfileRepository.findById(driverId)).thenReturn(Optional.of(profile));
     when(vehicleRepository.findByDriverId(driverId)).thenReturn(List.of(activeVehicle));
     when(driverProfileRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-    when(driverMapper.toResponse(any(DriverProfile.class))).thenReturn(
-        new DriverProfileResponse(
-            driverId,
-            "001234567890",
-            "123 Hanoi Street",
-            DriverReviewStatus.APPROVED,
-            null,
-            DriverAvailabilityStatus.AVAILABLE));
+    when(driverMapper.toResponse(any(DriverProfile.class)))
+        .thenReturn(
+            new DriverProfileResponse(
+                driverId,
+                "001234567890",
+                "123 Hanoi Street",
+                DriverReviewStatus.APPROVED,
+                null,
+                DriverAvailabilityStatus.AVAILABLE));
 
-    DriverProfileResponse response = service.updateAvailability(driverId, DriverAvailabilityStatus.AVAILABLE);
+    DriverProfileResponse response =
+        service.updateAvailability(driverId, DriverAvailabilityStatus.AVAILABLE);
 
     assertNotNull(response);
     assertEquals(DriverAvailabilityStatus.AVAILABLE, response.availabilityStatus());
     assertEquals(DriverAvailabilityStatus.AVAILABLE, profile.getAvailabilityStatus());
+    verify(redisTemplate).delete(DriverProfileServiceImpl.REDIS_PROFILE_CACHE_PREFIX + driverId);
   }
 
   @Test
@@ -96,6 +119,7 @@ class DriverProfileServiceImplTest {
 
     assertEquals(422, ex.getHttpStatus());
     assertTrue(ex.getMessage().contains("Only APPROVED drivers"));
+    verify(redisTemplate, never()).delete(anyString());
   }
 
   @Test
@@ -118,6 +142,7 @@ class DriverProfileServiceImplTest {
 
     assertEquals(422, ex.getHttpStatus());
     assertTrue(ex.getMessage().contains("at least one active vehicle"));
+    verify(redisTemplate, never()).delete(anyString());
   }
 
   @Test
@@ -149,11 +174,13 @@ class DriverProfileServiceImplTest {
 
     assertEquals(422, ex.getHttpStatus());
     assertTrue(ex.getMessage().contains("at least one active vehicle"));
+    verify(redisTemplate, never()).delete(anyString());
   }
 
   @Test
-  void shouldCacheProfileAndServeSubsequentRequestsFromCache() {
+  void shouldCacheProfileAndServeSubsequentRequestsFromCache() throws Exception {
     UUID driverId = UUID.randomUUID();
+    String cacheKey = DriverProfileServiceImpl.REDIS_PROFILE_CACHE_PREFIX + driverId;
     DriverProfile profile =
         DriverProfile.builder()
             .driverId(driverId)
@@ -171,6 +198,11 @@ class DriverProfileServiceImplTest {
             null,
             DriverAvailabilityStatus.AVAILABLE);
 
+    String serializedJson = objectMapper.writeValueAsString(expectedResponse);
+
+    // First call: cache miss -> queries DB -> saves to Redis
+    // Second call: cache hit -> returns from Redis
+    when(valueOperations.get(cacheKey)).thenReturn(null).thenReturn(serializedJson);
     when(driverProfileRepository.findById(driverId)).thenReturn(Optional.of(profile));
     when(driverMapper.toResponse(profile)).thenReturn(expectedResponse);
 
@@ -178,13 +210,51 @@ class DriverProfileServiceImplTest {
     DriverProfileResponse res2 = service.getProfile(driverId);
 
     assertNotNull(res1);
-    assertSame(res1, res2);
+    assertNotNull(res2);
+    assertEquals(expectedResponse, res1);
+    assertEquals(expectedResponse, res2);
+
+    verify(driverProfileRepository, times(1)).findById(driverId);
+    verify(valueOperations, times(1))
+        .set(eq(cacheKey), eq(serializedJson), eq(Duration.ofSeconds(300)));
+  }
+
+  @Test
+  void shouldFallbackToDatabaseWhenRedisCacheIsCorrupted() {
+    UUID driverId = UUID.randomUUID();
+    String cacheKey = DriverProfileServiceImpl.REDIS_PROFILE_CACHE_PREFIX + driverId;
+    DriverProfile profile =
+        DriverProfile.builder()
+            .driverId(driverId)
+            .userId(driverId)
+            .reviewStatus(DriverReviewStatus.APPROVED)
+            .availabilityStatus(DriverAvailabilityStatus.AVAILABLE)
+            .build();
+
+    DriverProfileResponse expectedResponse =
+        new DriverProfileResponse(
+            driverId,
+            "001234567890",
+            "123 Hanoi Street",
+            DriverReviewStatus.APPROVED,
+            null,
+            DriverAvailabilityStatus.AVAILABLE);
+
+    when(valueOperations.get(cacheKey)).thenReturn("{ invalid-corrupted-json }");
+    when(driverProfileRepository.findById(driverId)).thenReturn(Optional.of(profile));
+    when(driverMapper.toResponse(profile)).thenReturn(expectedResponse);
+
+    DriverProfileResponse response = service.getProfile(driverId);
+
+    assertNotNull(response);
+    assertEquals(expectedResponse, response);
     verify(driverProfileRepository, times(1)).findById(driverId);
   }
 
   @Test
   void shouldSubmitKycWithUserIdAndInvalidateCache() {
     UUID driverId = UUID.randomUUID();
+    String cacheKey = DriverProfileServiceImpl.REDIS_PROFILE_CACHE_PREFIX + driverId;
     DriverProfile existingProfile =
         DriverProfile.builder()
             .driverId(driverId)
@@ -192,25 +262,11 @@ class DriverProfileServiceImplTest {
             .availabilityStatus(DriverAvailabilityStatus.OFFLINE)
             .build();
 
-    DriverProfileResponse initialResponse =
-        new DriverProfileResponse(
-            driverId,
-            "001234567890",
-            "123 Hanoi Street",
-            DriverReviewStatus.DRAFT,
-            null,
-            DriverAvailabilityStatus.OFFLINE);
-
     when(driverProfileRepository.findById(driverId)).thenReturn(Optional.of(existingProfile));
-    when(driverMapper.toResponse(existingProfile)).thenReturn(initialResponse);
-
-    // Warm cache
-    service.getProfile(driverId);
-    verify(driverProfileRepository, times(1)).findById(driverId);
 
     var kycReq =
-        new com.ridehailing.logistics.driver.dto.request.DriverKycRequest(
-            "001234567890", java.time.LocalDate.of(1995, 5, 20), "456 New Street");
+        new DriverKycRequest(
+            "001234567890", LocalDate.of(1995, 5, 20), "456 New Street");
 
     when(driverProfileRepository.save(any(DriverProfile.class)))
         .thenAnswer(inv -> inv.getArgument(0));
@@ -229,9 +285,40 @@ class DriverProfileServiceImplTest {
 
     assertEquals(DriverReviewStatus.PENDING_REVIEW, kycResponse.reviewStatus());
     assertEquals(driverId, existingProfile.getUserId());
+    verify(redisTemplate).delete(cacheKey);
+  }
 
-    // Subsequent getProfile should query repository again because cache was evicted (1st getProfile + 1st submitKyc + 2nd getProfile = 3)
-    service.getProfile(driverId);
-    verify(driverProfileRepository, times(3)).findById(driverId);
+  @Test
+  void shouldInvalidateCacheOnApproveDriver() {
+    UUID driverId = UUID.randomUUID();
+    UUID reviewerId = UUID.randomUUID();
+    String cacheKey = DriverProfileServiceImpl.REDIS_PROFILE_CACHE_PREFIX + driverId;
+
+    DriverProfile profile =
+        DriverProfile.builder()
+            .driverId(driverId)
+            .reviewStatus(DriverReviewStatus.PENDING_REVIEW)
+            .availabilityStatus(DriverAvailabilityStatus.OFFLINE)
+            .build();
+
+    when(driverProfileRepository.findById(driverId)).thenReturn(Optional.of(profile));
+    when(driverProfileRepository.save(any(DriverProfile.class)))
+        .thenAnswer(inv -> inv.getArgument(0));
+
+    DriverProfileResponse response =
+        new DriverProfileResponse(
+            driverId,
+            "001234567890",
+            "123 Hanoi Street",
+            DriverReviewStatus.APPROVED,
+            "Verified successfully by reviewer",
+            DriverAvailabilityStatus.OFFLINE);
+    when(driverMapper.toResponse(any(DriverProfile.class))).thenReturn(response);
+
+    DriverProfileResponse result = service.approveDriver(driverId, reviewerId);
+
+    assertNotNull(result);
+    assertEquals(DriverReviewStatus.APPROVED, result.reviewStatus());
+    verify(redisTemplate).delete(cacheKey);
   }
 }

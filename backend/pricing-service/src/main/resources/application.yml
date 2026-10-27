@@ -15,6 +15,16 @@ spring:
       pageable:
         default-page-size: 20
         max-page-size: 100
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 4
+          max-wait: 2000ms
   threads:
     virtual:
       enabled: true

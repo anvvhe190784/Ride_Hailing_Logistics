@@ -1,38 +1,58 @@
 package com.ridehailing.logistics.common.security;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
 
+import java.time.Duration;
 import java.time.Instant;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 
+@ExtendWith(MockitoExtension.class)
 class TokenBlacklistServiceTest {
+
+  @Mock private StringRedisTemplate redisTemplate;
+  @Mock private ValueOperations<String, String> valueOperations;
 
   private TokenBlacklistService blacklistService;
 
   @BeforeEach
   void setUp() {
-    blacklistService = new TokenBlacklistService();
+    blacklistService = new TokenBlacklistService(redisTemplate);
   }
 
   @Test
-  void shouldBlacklistAndDetectToken() {
+  void shouldBlacklistAndDetectTokenInRedis() {
     String token = "sample-test-token-123";
+    String expectedKey = TokenBlacklistService.REDIS_BLACKLIST_PREFIX + token;
     Instant future = Instant.now().plusSeconds(300);
+
+    when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+    when(redisTemplate.hasKey(expectedKey)).thenReturn(false).thenReturn(true);
 
     assertFalse(blacklistService.isBlacklisted(token));
     blacklistService.blacklistToken(token, future);
     assertTrue(blacklistService.isBlacklisted(token));
+
+    verify(valueOperations).set(eq(expectedKey), eq("revoked"), any(Duration.class));
   }
 
   @Test
-  void shouldAutoExpireBlacklistedToken() {
+  void shouldSkipAlreadyExpiredToken() {
     String token = "sample-expired-token";
     Instant past = Instant.now().minusSeconds(10);
 
     blacklistService.blacklistToken(token, past);
-    // When queried, it detects expiration and removes entry
-    assertFalse(blacklistService.isBlacklisted(token));
+
+    verifyNoInteractions(redisTemplate);
   }
 
   @Test
@@ -42,17 +62,18 @@ class TokenBlacklistServiceTest {
 
     blacklistService.blacklistToken(null, Instant.now().plusSeconds(60));
     blacklistService.blacklistToken("   ", Instant.now().plusSeconds(60));
-    assertEquals(0, blacklistService.size());
+
+    verifyNoInteractions(redisTemplate);
   }
 
   @Test
-  void shouldCleanupExpiredEntries() {
-    blacklistService.blacklistToken("token1", Instant.now().minusSeconds(60));
-    blacklistService.blacklistToken("token2", Instant.now().plusSeconds(300));
+  void shouldReturnSizeAndClearKeysInRedis() {
+    Set<String> keys = Set.of("blacklist:jwt:t1", "blacklist:jwt:t2");
+    when(redisTemplate.keys("blacklist:jwt:*")).thenReturn(keys);
 
-    blacklistService.cleanupExpired();
-    assertEquals(1, blacklistService.size());
-    assertTrue(blacklistService.isBlacklisted("token2"));
-    assertFalse(blacklistService.isBlacklisted("token1"));
+    assertEquals(2, blacklistService.size());
+
+    blacklistService.clear();
+    verify(redisTemplate).delete(keys);
   }
 }

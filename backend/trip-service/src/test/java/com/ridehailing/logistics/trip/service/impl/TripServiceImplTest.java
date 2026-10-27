@@ -1,11 +1,7 @@
 package com.ridehailing.logistics.trip.service.impl;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import com.ridehailing.logistics.common.domain.enums.DriverAvailabilityStatus;
 import com.ridehailing.logistics.common.domain.enums.PaymentMethod;
 import com.ridehailing.logistics.common.domain.enums.ServiceType;
@@ -13,6 +9,7 @@ import com.ridehailing.logistics.common.domain.enums.TripStatus;
 import com.ridehailing.logistics.common.dto.ApiResponse;
 import com.ridehailing.logistics.common.dto.FareQuoteResponse;
 import com.ridehailing.logistics.common.exception.BaseDomainException;
+import com.ridehailing.logistics.common.lock.RedisDistributedLockService;
 import com.ridehailing.logistics.trip.client.DriverClient;
 import com.ridehailing.logistics.trip.client.LocationClient;
 import com.ridehailing.logistics.trip.client.PricingClient;
@@ -43,6 +40,14 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class TripServiceImplTest {
@@ -55,6 +60,9 @@ class TripServiceImplTest {
   @Mock private TripEventProducer eventProducer;
   @Mock private OutboxEventRepository outboxEventRepository;
   @Mock private ApplicationEventPublisher applicationEventPublisher;
+  @Mock private StringRedisTemplate redisTemplate;
+  @Mock private ValueOperations<String, String> valueOperations;
+  @Mock private RedisDistributedLockService lockService;
   @Spy private ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
   @InjectMocks private TripServiceImpl tripService;
@@ -68,6 +76,9 @@ class TripServiceImplTest {
     customerId = UUID.randomUUID();
     quoteId = UUID.randomUUID();
     idempotencyKey = "key-" + UUID.randomUUID();
+
+    lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+    lenient().when(lockService.tryAcquire(anyString(), anyString(), any())).thenReturn(true);
   }
 
   @Test
@@ -281,5 +292,97 @@ class TripServiceImplTest {
     assertEquals(TripStatus.IN_TRIP, response.status());
     assertNotNull(trip.getInTripAt());
     assertNotNull(trip.getStartedAt());
+  }
+
+  @Test
+  @DisplayName("respondOffer should reject with 409 TRIP_ALREADY_ASSIGNED when claim lock acquisition fails")
+  void shouldRejectOfferWhenRedisClaimLockFails() {
+    UUID offerId = UUID.randomUUID();
+    UUID driverId = UUID.randomUUID();
+    UUID tripId = UUID.randomUUID();
+
+    DriverOffer offer =
+        DriverOffer.builder()
+            .id(offerId)
+            .tripId(tripId)
+            .driverId(driverId)
+            .status("PENDING")
+            .expiresAt(Instant.now().plusSeconds(30))
+            .build();
+
+    when(driverOfferRepository.findById(offerId)).thenReturn(Optional.of(offer));
+    when(lockService.tryAcquire(
+            eq(TripServiceImpl.REDIS_TRIP_CLAIM_LOCK_PREFIX + tripId), anyString(), any()))
+        .thenReturn(false);
+
+    BaseDomainException ex =
+        assertThrows(
+            BaseDomainException.class,
+            () -> tripService.respondOffer(offerId, driverId, true));
+
+    assertEquals("TRIP_ALREADY_ASSIGNED", ex.getErrorCode());
+    assertEquals(
+        "Trip is no longer available or is currently being claimed by another driver",
+        ex.getMessage());
+    assertEquals("REJECTED", offer.getStatus());
+    assertNotNull(offer.getRespondedAt());
+    verify(driverOfferRepository, times(1)).save(offer);
+    verify(tripRepository, never()).claimTripAtomically(any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("createTrip should return cached response from Redis idempotency if present")
+  void shouldReturnCachedTripFromRedisIdempotency() throws Exception {
+    CreateTripRequest request =
+        new CreateTripRequest(quoteId, idempotencyKey, PaymentMethod.CASH);
+
+    TripDetailResponse cachedResponse =
+        new TripDetailResponse(
+            UUID.randomUUID(),
+            "TRP-CACHED-1",
+            ServiceType.RIDE,
+            customerId,
+            null,
+            TripStatus.MATCHING,
+            quoteId,
+            new BigDecimal("50000"),
+            "VND",
+            PaymentMethod.CASH,
+            Instant.now(),
+            null);
+
+    String cachedJson = objectMapper.writeValueAsString(cachedResponse);
+    when(valueOperations.get(TripServiceImpl.REDIS_TRIP_IDEMPOTENCY_PREFIX + idempotencyKey))
+        .thenReturn(cachedJson);
+
+    TripDetailResponse result = tripService.createTrip(customerId, request);
+
+    assertNotNull(result);
+    assertEquals("TRP-CACHED-1", result.tripCode());
+    verify(pricingClient, never()).consumeQuote(any(), any());
+    verify(tripRepository, never()).save(any());
+  }
+
+  @Test
+  @DisplayName("createTrip should throw conflict IDEMPOTENCY_IN_PROGRESS if idempotency lock fails")
+  void shouldThrowConflictWhenIdempotencyLockFails() {
+    CreateTripRequest request =
+        new CreateTripRequest(quoteId, idempotencyKey, PaymentMethod.CASH);
+
+    when(valueOperations.get(TripServiceImpl.REDIS_TRIP_IDEMPOTENCY_PREFIX + idempotencyKey))
+        .thenReturn(null);
+    when(lockService.tryAcquire(
+            eq(TripServiceImpl.REDIS_TRIP_IDEMPOTENCY_LOCK_PREFIX + idempotencyKey),
+            anyString(),
+            any()))
+        .thenReturn(false);
+
+    BaseDomainException ex =
+        assertThrows(
+            BaseDomainException.class,
+            () -> tripService.createTrip(customerId, request));
+
+    assertEquals("IDEMPOTENCY_IN_PROGRESS", ex.getErrorCode());
+    verify(pricingClient, never()).consumeQuote(any(), any());
   }
 }

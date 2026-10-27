@@ -1,5 +1,6 @@
 package com.ridehailing.logistics.pricing.service.impl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ridehailing.logistics.common.domain.enums.ServiceType;
 import com.ridehailing.logistics.common.dto.FareQuoteResponse;
 import com.ridehailing.logistics.common.exception.BaseDomainException;
@@ -11,35 +12,56 @@ import com.ridehailing.logistics.pricing.repository.PricingRuleRepository;
 import com.ridehailing.logistics.pricing.service.PricingService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.geom.PrecisionModel;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class PricingServiceImpl implements PricingService {
 
-  private record CachedPricingRule(PricingRule rule, Instant expiresAt) {}
-  private record CachedQuoteResponse(FareQuoteResponse response, Instant expiresAt) {}
-
-  private final Map<String, CachedPricingRule> pricingRuleCache = new ConcurrentHashMap<>();
-  private final Map<String, CachedQuoteResponse> idempotencyCache = new ConcurrentHashMap<>();
+  public static final String REDIS_RULE_CACHE_PREFIX = "cache:pricing:rule:";
+  public static final String REDIS_QUOTE_IDEMPOTENCY_PREFIX = "idempotency:pricing:quote:";
 
   private final PricingRuleRepository pricingRuleRepository;
   private final FareQuoteRepository fareQuoteRepository;
+  private final StringRedisTemplate redisTemplate;
+  private final ObjectMapper objectMapper;
   private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
+
+  public PricingServiceImpl(
+      PricingRuleRepository pricingRuleRepository,
+      FareQuoteRepository fareQuoteRepository) {
+    this(
+        pricingRuleRepository,
+        fareQuoteRepository,
+        null,
+        new ObjectMapper().findAndRegisterModules());
+  }
+
+  @Autowired
+  public PricingServiceImpl(
+      PricingRuleRepository pricingRuleRepository,
+      FareQuoteRepository fareQuoteRepository,
+      @Autowired(required = false) StringRedisTemplate redisTemplate,
+      @Autowired(required = false) ObjectMapper objectMapper) {
+    this.pricingRuleRepository = pricingRuleRepository;
+    this.fareQuoteRepository = fareQuoteRepository;
+    this.redisTemplate = redisTemplate;
+    this.objectMapper =
+        objectMapper != null ? objectMapper : new ObjectMapper().findAndRegisterModules();
+  }
 
   @Override
   @Transactional
@@ -51,11 +73,19 @@ public class PricingServiceImpl implements PricingService {
   @Transactional
   public FareQuoteResponse createQuote(
       UUID customerId, FareEstimateRequest request, String idempotencyKey) {
-    if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-      CachedQuoteResponse cached = idempotencyCache.get(idempotencyKey);
-      if (cached != null && cached.expiresAt().isAfter(Instant.now())) {
-        log.info("Returning cached fare quote for idempotency key: {}", idempotencyKey);
-        return cached.response();
+    if (idempotencyKey != null && !idempotencyKey.isBlank() && redisTemplate != null) {
+      try {
+        String cachedQuoteJson =
+            redisTemplate.opsForValue().get(REDIS_QUOTE_IDEMPOTENCY_PREFIX + idempotencyKey);
+        if (cachedQuoteJson != null && !cachedQuoteJson.isBlank()) {
+          log.info("Returning cached fare quote for idempotency key: {}", idempotencyKey);
+          return objectMapper.readValue(cachedQuoteJson, FareQuoteResponse.class);
+        }
+      } catch (Exception e) {
+        log.warn(
+            "Failed to read or deserialize cached quote for idempotency key {}: {}",
+            idempotencyKey,
+            e.getMessage());
       }
     }
 
@@ -129,22 +159,38 @@ public class PricingServiceImpl implements PricingService {
         totalFare);
 
     FareQuoteResponse response = toResponse(quote);
-    if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-      idempotencyCache.put(
-          idempotencyKey, new CachedQuoteResponse(response, quote.getExpiresAt()));
+    if (idempotencyKey != null && !idempotencyKey.isBlank() && redisTemplate != null) {
+      try {
+        String json = objectMapper.writeValueAsString(response);
+        redisTemplate
+            .opsForValue()
+            .set(REDIS_QUOTE_IDEMPOTENCY_PREFIX + idempotencyKey, json, Duration.ofMinutes(10));
+      } catch (Exception e) {
+        log.warn(
+            "Failed to cache quote idempotency for key {}: {}", idempotencyKey, e.getMessage());
+      }
     }
 
     return response;
   }
 
   private PricingRule getCachedOrFetchRule(ServiceType serviceType, String region) {
-    String cacheKey = serviceType.name() + ":" + region;
-    Instant now = Instant.now();
-    CachedPricingRule cached = pricingRuleCache.get(cacheKey);
-    if (cached != null && cached.expiresAt().isAfter(now)) {
-      return cached.rule();
+    String redisKey = REDIS_RULE_CACHE_PREFIX + serviceType.name() + ":" + region;
+    if (redisTemplate != null) {
+      try {
+        String cachedRuleJson = redisTemplate.opsForValue().get(redisKey);
+        if (cachedRuleJson != null && !cachedRuleJson.isBlank()) {
+          return objectMapper.readValue(cachedRuleJson, PricingRule.class);
+        }
+      } catch (Exception e) {
+        log.warn(
+            "Failed to read or deserialize cached pricing rule for key {}: {}",
+            redisKey,
+            e.getMessage());
+      }
     }
 
+    Instant now = Instant.now();
     PricingRule rule =
         pricingRuleRepository
             .findActiveRule(serviceType, region, now)
@@ -167,10 +213,15 @@ public class PricingServiceImpl implements PricingService {
                         .isActive(true)
                         .build());
 
-    // 5-minute TTL with ±30s randomized jitter
-    long ttlSeconds = 300L + ThreadLocalRandom.current().nextLong(-30, 31);
-    pricingRuleCache.put(
-        cacheKey, new CachedPricingRule(rule, now.plus(ttlSeconds, ChronoUnit.SECONDS)));
+    if (redisTemplate != null) {
+      try {
+        String ruleJson = objectMapper.writeValueAsString(rule);
+        redisTemplate.opsForValue().set(redisKey, ruleJson, Duration.ofMinutes(5));
+      } catch (Exception e) {
+        log.warn("Failed to cache pricing rule for key {}: {}", redisKey, e.getMessage());
+      }
+    }
+
     return rule;
   }
 

@@ -1,76 +1,91 @@
 package com.ridehailing.logistics.common.security;
 
+import java.time.Duration;
 import java.time.Instant;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 /**
- * Thread-safe in-memory blacklist service for revoked JWT access tokens and JTIs. Stores token
- * identifiers mapped to their expiration Instant with automatic lazy cleanup.
+ * Pure Redis-backed blacklist service for revoked JWT access tokens and JTIs. Stores token
+ * identifiers exclusively in Redis with TTL matching their natural expiration (Zero RAM cache).
  */
 @Slf4j
 @Component
 public class TokenBlacklistService {
 
-  private final Map<String, Instant> blacklist = new ConcurrentHashMap<>();
+  public static final String REDIS_BLACKLIST_PREFIX = "blacklist:jwt:";
+
+  private final StringRedisTemplate redisTemplate;
+
+  public TokenBlacklistService() {
+    this(null);
+  }
+
+  @Autowired
+  public TokenBlacklistService(@Autowired(required = false) StringRedisTemplate redisTemplate) {
+    this.redisTemplate = redisTemplate;
+  }
 
   /**
-   * Adds a token or JTI to the revocation blacklist until its natural expiration.
+   * Adds a token or JTI to the Redis revocation blacklist until its natural expiration.
    *
    * @param tokenOrJti raw JWT string or JTI claim identifier
    * @param expiresAt token expiration instant
    */
   public void blacklistToken(String tokenOrJti, Instant expiresAt) {
-    if (tokenOrJti == null || tokenOrJti.isBlank()) {
+    if (tokenOrJti == null || tokenOrJti.isBlank() || redisTemplate == null) {
       return;
     }
-    // Lazy cleanup of expired tokens
-    cleanupExpired();
 
     Instant expiry =
         expiresAt != null
             ? expiresAt
             : Instant.now().plusSeconds(SecurityConstants.ACCESS_TOKEN_VALIDITY_SECONDS);
-    blacklist.put(tokenOrJti, expiry);
-    log.debug("Blacklisted token/jti identifier: {}, expiresAt: {}", tokenOrJti, expiry);
+
+    long ttlSeconds = Duration.between(Instant.now(), expiry).toSeconds();
+    if (ttlSeconds <= 0) {
+      log.debug("Token/JTI already expired, skipping Redis blacklist: {}", tokenOrJti);
+      return;
+    }
+
+    String redisKey = REDIS_BLACKLIST_PREFIX + tokenOrJti;
+    redisTemplate.opsForValue().set(redisKey, "revoked", Duration.ofSeconds(ttlSeconds));
+    log.info("Blacklisted token/jti in Redis: {}, ttl: {}s", redisKey, ttlSeconds);
   }
 
   /**
-   * Checks if a token or JTI is currently blacklisted.
+   * Checks if a token or JTI is currently blacklisted in Redis.
    *
    * @param tokenOrJti raw JWT string or JTI claim identifier
-   * @return true if the token is blacklisted and not yet expired
+   * @return true if the token exists in Redis blacklist
    */
   public boolean isBlacklisted(String tokenOrJti) {
-    if (tokenOrJti == null || tokenOrJti.isBlank()) {
+    if (tokenOrJti == null || tokenOrJti.isBlank() || redisTemplate == null) {
       return false;
     }
-    Instant expiresAt = blacklist.get(tokenOrJti);
-    if (expiresAt == null) {
-      return false;
-    }
-    if (Instant.now().isAfter(expiresAt)) {
-      blacklist.remove(tokenOrJti);
-      return false;
-    }
-    return true;
+    return Boolean.TRUE.equals(redisTemplate.hasKey(REDIS_BLACKLIST_PREFIX + tokenOrJti));
   }
 
-  /** Cleans up expired entries from the blacklist map. */
-  public void cleanupExpired() {
-    Instant now = Instant.now();
-    blacklist.entrySet().removeIf(entry -> now.isAfter(entry.getValue()));
-  }
-
-  /** Returns the count of currently blacklisted tokens. */
+  /** Returns the count of currently blacklisted tokens in Redis. */
   public int size() {
-    return blacklist.size();
+    if (redisTemplate == null) {
+      return 0;
+    }
+    Set<String> keys = redisTemplate.keys(REDIS_BLACKLIST_PREFIX + "*");
+    return keys != null ? keys.size() : 0;
   }
 
-  /** Clears all blacklisted tokens. */
+  /** Clears all blacklisted tokens in Redis. */
   public void clear() {
-    blacklist.clear();
+    if (redisTemplate == null) {
+      return;
+    }
+    Set<String> keys = redisTemplate.keys(REDIS_BLACKLIST_PREFIX + "*");
+    if (keys != null && !keys.isEmpty()) {
+      redisTemplate.delete(keys);
+    }
   }
 }
