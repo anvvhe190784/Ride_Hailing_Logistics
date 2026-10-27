@@ -19,6 +19,7 @@ import com.ridehailing.logistics.trip.domain.entity.Trip;
 import com.ridehailing.logistics.trip.dto.CreateTripRequest;
 import com.ridehailing.logistics.trip.dto.NearbyDriverResponse;
 import com.ridehailing.logistics.trip.dto.TripDetailResponse;
+import com.ridehailing.logistics.trip.dto.response.CancellationFeeResponse;
 import com.ridehailing.logistics.trip.event.TripCompletedInternalEvent;
 import com.ridehailing.logistics.trip.event.TripEventProducer;
 import com.ridehailing.logistics.trip.repository.DriverOfferRepository;
@@ -384,5 +385,115 @@ class TripServiceImplTest {
 
     assertEquals("IDEMPOTENCY_IN_PROGRESS", ex.getErrorCode());
     verify(pricingClient, never()).consumeQuote(any(), any());
+  }
+
+  @Test
+  @DisplayName("FR-CAN-003: Customer cancels within 3-minute grace period should incur 0 VND cancellation fee")
+  void shouldChargeZeroFeeWhenCustomerCancelsDuringGracePeriod() {
+    UUID tripId = UUID.randomUUID();
+    UUID driverId = UUID.randomUUID();
+    Trip trip =
+        Trip.builder()
+            .id(tripId)
+            .tripCode("TRP-GRACE-1")
+            .customerId(customerId)
+            .driverId(driverId)
+            .status(TripStatus.PICKING_UP)
+            .serviceType(ServiceType.RIDE)
+            .acceptedAt(Instant.now().minusSeconds(60)) // 1 minute ago (< 3 min)
+            .build();
+
+    when(tripRepository.findById(tripId)).thenReturn(Optional.of(trip));
+    when(tripRepository.save(any(Trip.class))).thenAnswer(inv -> inv.getArgument(0));
+
+    TripDetailResponse response =
+        tripService.updateTripStatus(tripId, customerId, "CUSTOMER", TripStatus.CANCELLED);
+
+    assertNotNull(response);
+    assertEquals(TripStatus.CANCELLED, response.status());
+    assertEquals(BigDecimal.ZERO, trip.getCancellationFee());
+  }
+
+  @Test
+  @DisplayName("FR-CAN-003: Customer cancels after 3 minutes in PICKING_UP should incur 10,000 VND fee")
+  void shouldChargePenaltyFeeWhenCustomerCancelsAfterGracePeriod() {
+    UUID tripId = UUID.randomUUID();
+    UUID driverId = UUID.randomUUID();
+    Trip trip =
+        Trip.builder()
+            .id(tripId)
+            .tripCode("TRP-PENALTY-1")
+            .customerId(customerId)
+            .driverId(driverId)
+            .status(TripStatus.PICKING_UP)
+            .serviceType(ServiceType.RIDE)
+            .acceptedAt(Instant.now().minusSeconds(240)) // 4 minutes ago (> 3 min)
+            .build();
+
+    when(tripRepository.findById(tripId)).thenReturn(Optional.of(trip));
+    when(tripRepository.save(any(Trip.class))).thenAnswer(inv -> inv.getArgument(0));
+
+    TripDetailResponse response =
+        tripService.updateTripStatus(tripId, customerId, "CUSTOMER", TripStatus.CANCELLED);
+
+    assertNotNull(response);
+    assertEquals(TripStatus.CANCELLED, response.status());
+    assertEquals(new BigDecimal("10000.00"), trip.getCancellationFee());
+  }
+
+  @Test
+  @DisplayName("FR-CAN-003: Customer cancels when driver ARRIVED should incur 15,000 VND fee")
+  void shouldChargePenaltyFeeWhenCustomerCancelsWhenDriverArrived() {
+    UUID tripId = UUID.randomUUID();
+    UUID driverId = UUID.randomUUID();
+    Trip trip =
+        Trip.builder()
+            .id(tripId)
+            .tripCode("TRP-ARRIVED-CANCEL")
+            .customerId(customerId)
+            .driverId(driverId)
+            .status(TripStatus.ARRIVED)
+            .serviceType(ServiceType.RIDE)
+            .acceptedAt(Instant.now().minusSeconds(300))
+            .arrivedAt(Instant.now().minusSeconds(60))
+            .build();
+
+    when(tripRepository.findById(tripId)).thenReturn(Optional.of(trip));
+    when(tripRepository.save(any(Trip.class))).thenAnswer(inv -> inv.getArgument(0));
+
+    TripDetailResponse response =
+        tripService.updateTripStatus(tripId, customerId, "CUSTOMER", TripStatus.CANCELLED);
+
+    assertNotNull(response);
+    assertEquals(TripStatus.CANCELLED, response.status());
+    assertEquals(new BigDecimal("15000.00"), trip.getCancellationFee());
+  }
+
+  @Test
+  @DisplayName("FR-CAN-004: estimateCancellationFee should provide accurate preview before cancellation")
+  void shouldEstimateCancellationFeeProperly() {
+    UUID tripId = UUID.randomUUID();
+    UUID driverId = UUID.randomUUID();
+    Trip trip =
+        Trip.builder()
+            .id(tripId)
+            .tripCode("TRP-PREVIEW-1")
+            .customerId(customerId)
+            .driverId(driverId)
+            .status(TripStatus.ARRIVED)
+            .serviceType(ServiceType.RIDE)
+            .acceptedAt(Instant.now().minusSeconds(300))
+            .arrivedAt(Instant.now().minusSeconds(60))
+            .build();
+
+    when(tripRepository.findById(tripId)).thenReturn(Optional.of(trip));
+
+    CancellationFeeResponse preview =
+        tripService.estimateCancellationFee(tripId, customerId, "CUSTOMER");
+
+    assertNotNull(preview);
+    assertEquals(tripId, preview.tripId());
+    assertEquals(new BigDecimal("15000.00"), preview.cancellationFee());
+    assertFalse(preview.gracePeriodActive());
   }
 }

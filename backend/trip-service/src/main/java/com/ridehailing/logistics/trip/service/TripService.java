@@ -5,6 +5,7 @@ import com.ridehailing.logistics.trip.domain.entity.Trip;
 import com.ridehailing.logistics.trip.dto.CreateTripRequest;
 import com.ridehailing.logistics.trip.dto.DriverOfferResponse;
 import com.ridehailing.logistics.trip.dto.TripDetailResponse;
+import com.ridehailing.logistics.trip.dto.response.CancellationFeeResponse;
 import java.util.UUID;
 
 @SuppressWarnings("unused")
@@ -30,4 +31,6 @@ public interface TripService {
       UUID tripId, UUID actorId, String actorRole, TripStatus nextStatus);
 
   TripDetailResponse getTrip(UUID tripId);
+
+  CancellationFeeResponse estimateCancellationFee(UUID tripId, UUID actorId, String actorRole);
 }

@@ -33,6 +33,9 @@ public class PricingServiceImpl implements PricingService {
 
   public static final String REDIS_RULE_CACHE_PREFIX = "cache:pricing:rule:";
   public static final String REDIS_QUOTE_IDEMPOTENCY_PREFIX = "idempotency:pricing:quote:";
+  public static final String REDIS_SURGE_DEMAND_PREFIX = "surge:demand:";
+  public static final BigDecimal MIN_SURGE = new BigDecimal("1.00");
+  public static final BigDecimal MAX_SURGE = new BigDecimal("2.50");
 
   private final PricingRuleRepository pricingRuleRepository;
   private final FareQuoteRepository fareQuoteRepository;
@@ -114,7 +117,7 @@ public class PricingServiceImpl implements PricingService {
         minutes.multiply(rule.getPerMinuteRate()).setScale(2, RoundingMode.HALF_UP);
     BigDecimal subTotal = rule.getBaseFare().add(distancePrice).add(durationPrice);
 
-    BigDecimal surge = BigDecimal.valueOf(1.00); // Base surge
+    BigDecimal surge = calculateDynamicSurge(region);
     BigDecimal totalFare = subTotal.multiply(surge).setScale(2, RoundingMode.HALF_UP);
     if (totalFare.compareTo(rule.getMinimumFare()) < 0) {
       totalFare = rule.getMinimumFare();
@@ -290,6 +293,44 @@ public class PricingServiceImpl implements PricingService {
     log.info("Fare quote {} successfully consumed for customer {}", quoteId, customerId);
 
     return toResponse(quote);
+  }
+
+  /**
+   * Calculates dynamic surge multiplier based on regional demand per FR-PRI-007 to FR-PRI-010.
+   * Increments regional demand counter in Redis with 5-minute TTL, bounding between [1.00, 2.50].
+   */
+  public BigDecimal calculateDynamicSurge(String region) {
+    if (redisTemplate == null) {
+      return MIN_SURGE;
+    }
+    String demandKey = REDIS_SURGE_DEMAND_PREFIX + region;
+    Long currentDemand;
+    try {
+      currentDemand = redisTemplate.opsForValue().increment(demandKey);
+      if (currentDemand != null && currentDemand == 1L) {
+        redisTemplate.expire(demandKey, Duration.ofMinutes(5));
+      }
+    } catch (Exception e) {
+      log.warn(
+          "Failed to increment surge demand in Redis for region {}: {}", region, e.getMessage());
+      return MIN_SURGE;
+    }
+
+    if (currentDemand == null || currentDemand <= 5) {
+      return MIN_SURGE; // Baseline: 1.00x
+    }
+
+    // Dynamic scale: +0.05x per additional request over baseline, capped at 2.50x
+    long excess = currentDemand - 5;
+    double surgeRatio = 1.00 + (excess * 0.05);
+    BigDecimal calculated = BigDecimal.valueOf(surgeRatio).setScale(2, RoundingMode.HALF_UP);
+    if (calculated.compareTo(MAX_SURGE) > 0) {
+      return MAX_SURGE;
+    }
+    if (calculated.compareTo(MIN_SURGE) < 0) {
+      return MIN_SURGE;
+    }
+    return calculated;
   }
 
   private FareQuoteResponse toResponse(FareQuote q) {

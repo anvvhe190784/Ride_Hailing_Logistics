@@ -508,4 +508,39 @@ class PricingServiceTest {
     verifyNoInteractions(pricingRuleRepository);
     verifyNoInteractions(fareQuoteRepository);
   }
+
+  @Test
+  @DisplayName("FR-PRI-007: calculateDynamicSurge should return 1.00 when demand is at or below baseline")
+  void shouldReturnBaselineSurgeWhenDemandLow() {
+    when(valueOperations.increment(PricingServiceImpl.REDIS_SURGE_DEMAND_PREFIX + "HN"))
+        .thenReturn(3L);
+
+    BigDecimal surge = pricingService.calculateDynamicSurge("HN");
+
+    assertEquals(new BigDecimal("1.00"), surge);
+  }
+
+  @Test
+  @DisplayName("FR-PRI-009: calculateDynamicSurge should increase progressively under high demand")
+  void shouldReturnElevatedSurgeUnderHighDemand() {
+    // 15 requests -> excess 10 -> 1.00 + (10 * 0.05) = 1.50
+    when(valueOperations.increment(PricingServiceImpl.REDIS_SURGE_DEMAND_PREFIX + "HN"))
+        .thenReturn(15L);
+
+    BigDecimal surge = pricingService.calculateDynamicSurge("HN");
+
+    assertEquals(new BigDecimal("1.50"), surge);
+  }
+
+  @Test
+  @DisplayName("FR-PRI-007: calculateDynamicSurge should cap at MAX_SURGE (2.50) to protect consumers")
+  void shouldCapSurgeAtMaxSurgeMultiplier() {
+    // 100 requests -> exceeds 2.50 -> capped at 2.50
+    when(valueOperations.increment(PricingServiceImpl.REDIS_SURGE_DEMAND_PREFIX + "HN"))
+        .thenReturn(100L);
+
+    BigDecimal surge = pricingService.calculateDynamicSurge("HN");
+
+    assertEquals(new BigDecimal("2.50"), surge);
+  }
 }

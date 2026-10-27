@@ -8,6 +8,7 @@ import com.ridehailing.logistics.trip.dto.CreateTripRequest;
 import com.ridehailing.logistics.trip.dto.DriverOfferResponse;
 import com.ridehailing.logistics.trip.dto.RespondOfferRequest;
 import com.ridehailing.logistics.trip.dto.TripDetailResponse;
+import com.ridehailing.logistics.trip.dto.response.CancellationFeeResponse;
 import com.ridehailing.logistics.trip.service.TripService;
 import jakarta.validation.Valid;
 import java.util.UUID;
@@ -97,6 +98,18 @@ public class TripController {
       @RequestHeader(value = SecurityConstants.HEADER_CORRELATION_ID, required = false)
           String correlationId) {
     DriverOfferResponse response = tripService.respondOffer(offerId, driverId, request.accept());
+    return ResponseEntity.ok(ApiResponse.success(response, correlationId));
+  }
+
+  @GetMapping("/{tripId}/cancellation-fee")
+  public ResponseEntity<ApiResponse<CancellationFeeResponse>> estimateCancellationFee(
+      @PathVariable UUID tripId,
+      @RequestHeader(SecurityConstants.HEADER_USER_ID) UUID actorId,
+      @RequestHeader(value = SecurityConstants.HEADER_USER_ROLE, required = false) String actorRole,
+      @RequestHeader(value = SecurityConstants.HEADER_CORRELATION_ID, required = false)
+          String correlationId) {
+    CancellationFeeResponse response =
+        tripService.estimateCancellationFee(tripId, actorId, actorRole);
     return ResponseEntity.ok(ApiResponse.success(response, correlationId));
   }
 }

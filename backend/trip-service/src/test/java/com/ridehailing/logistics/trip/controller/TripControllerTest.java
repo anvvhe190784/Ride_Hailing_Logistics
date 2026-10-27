@@ -174,4 +174,25 @@ class TripControllerTest {
     verify(tripService, times(1))
         .updateTripStatus(tripId, driverId, "DRIVER", TripStatus.ARRIVED);
   }
+
+  @Test
+  @DisplayName("estimateCancellationFee should return cancellation fee preview")
+  void shouldReturnCancellationFeePreview() {
+    com.ridehailing.logistics.trip.dto.response.CancellationFeeResponse feeResponse =
+        new com.ridehailing.logistics.trip.dto.response.CancellationFeeResponse(
+            tripId, new BigDecimal("10000.00"), "VND", false, "FR-CAN-003 policy");
+    when(tripService.estimateCancellationFee(tripId, customerId, "CUSTOMER"))
+        .thenReturn(feeResponse);
+
+    ResponseEntity<ApiResponse<com.ridehailing.logistics.trip.dto.response.CancellationFeeResponse>>
+        response =
+            tripController.estimateCancellationFee(
+                tripId, customerId, "CUSTOMER", "corr-preview");
+
+    assertNotNull(response);
+    assertNotNull(response.getBody());
+    assertEquals(200, response.getStatusCode().value());
+    assertEquals(new BigDecimal("10000.00"), response.getBody().getData().cancellationFee());
+    verify(tripService, times(1)).estimateCancellationFee(tripId, customerId, "CUSTOMER");
+  }
 }

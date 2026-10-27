@@ -19,6 +19,7 @@ import com.ridehailing.logistics.trip.dto.CreateTripRequest;
 import com.ridehailing.logistics.trip.dto.DriverOfferResponse;
 import com.ridehailing.logistics.trip.dto.NearbyDriverResponse;
 import com.ridehailing.logistics.trip.dto.TripDetailResponse;
+import com.ridehailing.logistics.trip.dto.response.CancellationFeeResponse;
 import com.ridehailing.logistics.trip.event.TripCompletedInternalEvent;
 import com.ridehailing.logistics.trip.event.TripEventProducer;
 import com.ridehailing.logistics.trip.repository.DriverOfferRepository;
@@ -424,9 +425,16 @@ public class TripServiceImpl implements TripService {
 
     Instant now = Instant.now();
 
+    TripStatus currentStatus = trip.getStatus();
+
     // When transitioning from MATCHING to CANCELLED, expire pending driver offers
-    if (trip.getStatus() == TripStatus.MATCHING && nextStatus == TripStatus.CANCELLED) {
+    if (currentStatus == TripStatus.MATCHING && nextStatus == TripStatus.CANCELLED) {
       driverOfferRepository.expirePendingOffersByTripIds(List.of(tripId), now);
+    }
+
+    BigDecimal calculatedFee = BigDecimal.ZERO;
+    if (nextStatus == TripStatus.CANCELLED) {
+      calculatedFee = calculateCancellationFee(trip, currentStatus, actorId, actorRole);
     }
 
     trip.setStatus(nextStatus);
@@ -447,6 +455,7 @@ public class TripServiceImpl implements TripService {
     } else if (nextStatus == TripStatus.CANCELLED) {
       trip.setCancelledAt(now);
       trip.setCancelledBy(actorId);
+      trip.setCancellationFee(calculatedFee);
       if (trip.getCancellationReason() == null) {
         trip.setCancellationReason(
             isAdminOrSupport ? "Cancelled by staff/admin " + actorId : "Cancelled by " + actorId);
@@ -467,6 +476,72 @@ public class TripServiceImpl implements TripService {
             .orElseThrow(
                 () -> BaseDomainException.notFound(ERR_TRIP_NOT_FOUND, MSG_TRIP_NOT_FOUND));
     return toResponse(trip);
+  }
+
+  public static final BigDecimal CANCELLATION_FEE_ZERO = BigDecimal.ZERO;
+  public static final BigDecimal CANCELLATION_FEE_PICKING_UP = new BigDecimal("10000.00");
+  public static final BigDecimal CANCELLATION_FEE_ARRIVED = new BigDecimal("15000.00");
+  public static final long CANCELLATION_GRACE_PERIOD_MINUTES = 3L;
+
+  @Override
+  @Transactional(readOnly = true)
+  public CancellationFeeResponse estimateCancellationFee(
+      UUID tripId, UUID actorId, String actorRole) {
+    Trip trip =
+        tripRepository
+            .findById(tripId)
+            .orElseThrow(
+                () -> BaseDomainException.notFound(ERR_TRIP_NOT_FOUND, MSG_TRIP_NOT_FOUND));
+
+    BigDecimal fee = calculateCancellationFee(trip, trip.getStatus(), actorId, actorRole);
+    boolean gracePeriodActive = isGracePeriodActive(trip, trip.getStatus(), actorRole);
+    String policy =
+        fee.compareTo(BigDecimal.ZERO) == 0
+            ? (gracePeriodActive
+                ? "Miễn phí hủy trong thời gian ân hạn 3 phút"
+                : "Miễn phí hủy chuyến")
+            : "Áp dụng phí phạt hủy chuyến theo chính sách FR-CAN-003";
+
+    return new CancellationFeeResponse(tripId, fee, "VND", gracePeriodActive, policy);
+  }
+
+  private boolean isGracePeriodActive(Trip trip, TripStatus currentStatus, String actorRole) {
+    if (currentStatus == TripStatus.MATCHING || currentStatus == TripStatus.CREATED) {
+      return true;
+    }
+    if (trip.getAcceptedAt() == null) {
+      return true;
+    }
+    long minutesSinceAccepted = Duration.between(trip.getAcceptedAt(), Instant.now()).toMinutes();
+    return minutesSinceAccepted < CANCELLATION_GRACE_PERIOD_MINUTES;
+  }
+
+  private BigDecimal calculateCancellationFee(
+      Trip trip, TripStatus currentStatus, UUID actorId, String actorRole) {
+    // Staff/Admin or Driver cancellations do not incur penalty on customer
+    if ("ADMIN".equalsIgnoreCase(actorRole) || "DRIVER".equalsIgnoreCase(actorRole)) {
+      return CANCELLATION_FEE_ZERO;
+    }
+
+    // Matching stage: no driver accepted yet, free cancellation
+    if (currentStatus == TripStatus.MATCHING || currentStatus == TripStatus.CREATED) {
+      return CANCELLATION_FEE_ZERO;
+    }
+
+    // Driver arrived at pickup location: full penalty applies immediately
+    if (currentStatus == TripStatus.ARRIVED) {
+      return CANCELLATION_FEE_ARRIVED;
+    }
+
+    // Accepted or Picking Up: Check 3-minute grace period
+    if (currentStatus == TripStatus.ACCEPTED || currentStatus == TripStatus.PICKING_UP) {
+      if (isGracePeriodActive(trip, currentStatus, actorRole)) {
+        return CANCELLATION_FEE_ZERO;
+      }
+      return CANCELLATION_FEE_PICKING_UP;
+    }
+
+    return CANCELLATION_FEE_ZERO;
   }
 
   private void validateStateTransition(TripStatus current, TripStatus next) {
