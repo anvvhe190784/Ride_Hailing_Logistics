@@ -958,105 +958,7 @@
           }
         },
         {
-          "name": "5.8 Customer Create Trip (for Cancellation Flow)",
-          "event": [
-            {
-              "listen": "prerequest",
-              "script": {
-                "exec": [
-                  "var uuid = pm.variables.replaceIn(\"{{$guid}}\");",
-                  "pm.environment.set(\"idempotency_key\", uuid);",
-                  "",
-                  "// Request fresh quote to avoid QUOTE_ALREADY_USED",
-                  "pm.sendRequest({",
-                  "    url: pm.environment.get(\"base_url\") + \"/api/v1/pricing/quotes\",",
-                  "    method: \"POST\",",
-                  "    header: {",
-                  "        \"Content-Type\": \"application/json\",",
-                  "        \"Authorization\": \"Bearer \" + pm.environment.get(\"customer_token\")",
-                  "    },",
-                  "    body: {",
-                  "        mode: \"raw\",",
-                  "        raw: JSON.stringify({",
-                  "            serviceType: \"RIDE\",",
-                  "            regionCode: \"VN-HN\",",
-                  "            pickupAddress: \"Nhà hát Lớn Hà Nội, Hoàn Kiếm\",",
-                  "            pickupLat: 21.028511,",
-                  "            pickupLng: 105.854444,",
-                  "            dropoffAddress: \"Đại học Bách Khoa Hà Nội, Hai Bà Trưng\",",
-                  "            dropoffLat: 21.004444,",
-                  "            dropoffLng: 105.843333",
-                  "        })",
-                  "    }",
-                  "}, function (err, res) {",
-                  "    if (!err && res.code === 201) {",
-                  "        var q = res.json();",
-                  "        var qId = (q.data && (q.data.quoteId || q.data.id));",
-                  "        if (qId) {",
-                  "            pm.environment.set(\"quote_id_cancel\", qId);",
-                  "            console.log(\"Generated fresh quote for cancellation: \" + qId);",
-                  "        }",
-                  "    } else {",
-                  "        console.error(\"Failed to generate fresh quote for cancellation: \", err || (res && res.text()));",
-                  "    }",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            },
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test(\"Status code is 201 Created\", function () {",
-                  "    pm.response.to.have.status(201);",
-                  "});",
-                  "var jsonData = pm.response.json();",
-                  "if (jsonData.data) {",
-                  "    var tripId = jsonData.data.tripId || jsonData.data.id;",
-                  "    pm.environment.set(\"cancelled_trip_id\", tripId);",
-                  "    console.log(\"Saved cancelled_trip_id: \" + tripId);",
-                  "}"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{customer_token}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Idempotency-Key",
-                "value": "{{idempotency_key}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"quoteId\": \"{{quote_id_cancel}}\",\n  \"idempotencyKey\": \"{{idempotency_key}}\",\n  \"paymentMethod\": \"CASH\"\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/api/v1/trips",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "trips"
-              ]
-            }
-          }
-        },
-        {
-          "name": "5.9 Customer Preview Cancellation Fee",
+          "name": "5.8 Customer Preview Cancellation Fee",
           "event": [
             {
               "listen": "test",
@@ -1086,7 +988,7 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/v1/trips/{{cancelled_trip_id}}/cancellation-fee",
+              "raw": "{{base_url}}/api/v1/trips/{{trip_id}}/cancellation-fee",
               "host": [
                 "{{base_url}}"
               ],
@@ -1094,14 +996,14 @@
                 "api",
                 "v1",
                 "trips",
-                "{{cancelled_trip_id}}",
+                "{{trip_id}}",
                 "cancellation-fee"
               ]
             }
           }
         },
         {
-          "name": "5.10 Customer Cancel Trip",
+          "name": "5.9 Customer Cancel Trip",
           "event": [
             {
               "listen": "test",
@@ -1129,7 +1031,7 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/v1/trips/{{cancelled_trip_id}}/status?nextStatus=CANCELLED",
+              "raw": "{{base_url}}/api/v1/trips/{{trip_id}}/status?nextStatus=CANCELLED",
               "host": [
                 "{{base_url}}"
               ],
@@ -1137,7 +1039,7 @@
                 "api",
                 "v1",
                 "trips",
-                "{{cancelled_trip_id}}",
+                "{{trip_id}}",
                 "status"
               ],
               "query": [
