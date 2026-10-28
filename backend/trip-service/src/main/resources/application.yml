@@ -100,6 +100,10 @@ resilience4j:
       locationClient:
         base-config: default
 
+app:
+  trip:
+    offer-timeout-seconds: 120
+
 logging:
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} [%X{correlationId:-}] - %msg%n"

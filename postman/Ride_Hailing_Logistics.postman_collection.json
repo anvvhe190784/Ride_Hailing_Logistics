@@ -430,6 +430,35 @@
           }
         },
         {
+          "name": "5.1.1 Driver Get Pending Offers",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.data && jsonData.data.length > 0) {",
+                  "    pm.environment.set(\"offer_id\", jsonData.data[0].offerId);",
+                  "    console.log(\"Auto-assigned offer_id: \" + jsonData.data[0].offerId);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/trips/offers/pending",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "trips", "offers", "pending"]
+            }
+          }
+        },
+        {
           "name": "5.2 Driver Respond to Offer (Accept Trip)",
           "request": {
             "method": "POST",

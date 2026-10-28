@@ -17,6 +17,7 @@ import com.ridehailing.logistics.trip.domain.entity.DriverOffer;
 import com.ridehailing.logistics.trip.domain.entity.OutboxEvent;
 import com.ridehailing.logistics.trip.domain.entity.Trip;
 import com.ridehailing.logistics.trip.dto.CreateTripRequest;
+import com.ridehailing.logistics.trip.dto.DriverOfferResponse;
 import com.ridehailing.logistics.trip.dto.NearbyDriverResponse;
 import com.ridehailing.logistics.trip.dto.TripDetailResponse;
 import com.ridehailing.logistics.trip.dto.response.CancellationFeeResponse;
@@ -493,5 +494,70 @@ class TripServiceImplTest {
     assertEquals(tripId, preview.tripId());
     assertEquals(new BigDecimal("15000.00"), preview.cancellationFee());
     assertFalse(preview.gracePeriodActive());
+  }
+
+  @Test
+  @DisplayName("respondOffer should throw conflict OFFER_EXPIRED when offer expiresAt is before now")
+  void shouldThrowConflictWhenOfferExpired() {
+    UUID offerId = UUID.randomUUID();
+    UUID driverId = UUID.randomUUID();
+    UUID tripId = UUID.randomUUID();
+
+    DriverOffer offer =
+        DriverOffer.builder()
+            .id(offerId)
+            .tripId(tripId)
+            .driverId(driverId)
+            .status("PENDING")
+            .expiresAt(Instant.now().minusSeconds(10))
+            .build();
+
+    when(driverOfferRepository.findById(offerId)).thenReturn(Optional.of(offer));
+
+    BaseDomainException ex =
+        assertThrows(
+            BaseDomainException.class,
+            () -> tripService.respondOffer(offerId, driverId, true));
+
+    assertEquals("OFFER_EXPIRED", ex.getErrorCode());
+    assertTrue(ex.getMessage().contains("hết hạn") || ex.getMessage().contains("Offer expired"));
+    assertEquals("EXPIRED", offer.getStatus());
+    assertNotNull(offer.getRespondedAt());
+    verify(driverOfferRepository, times(1)).save(offer);
+  }
+
+  @Test
+  @DisplayName("getPendingOffersForDriver should return list of active unexpired offers for driver")
+  void shouldReturnPendingOffersForDriver() {
+    UUID driverId = UUID.randomUUID();
+    UUID tripId = UUID.randomUUID();
+    UUID offerId = UUID.randomUUID();
+
+    DriverOffer offer =
+        DriverOffer.builder()
+            .id(offerId)
+            .tripId(tripId)
+            .driverId(driverId)
+            .status("PENDING")
+            .estimatedPickupDistanceMeters(450)
+            .expiresAt(Instant.now().plusSeconds(100))
+            .build();
+
+    when(driverOfferRepository.findActivePendingOffersForDriver(
+            eq(driverId), eq("PENDING"), any(Instant.class)))
+        .thenReturn(List.of(offer));
+
+    List<DriverOfferResponse> responses = tripService.getPendingOffersForDriver(driverId);
+
+    assertNotNull(responses);
+    assertEquals(1, responses.size());
+    DriverOfferResponse res = responses.get(0);
+    assertEquals(offerId, res.offerId());
+    assertEquals(tripId, res.tripId());
+    assertEquals(driverId, res.driverId());
+    assertEquals("PENDING", res.status());
+    assertEquals(450, res.estimatedPickupDistanceMeters());
+    verify(driverOfferRepository, times(1))
+        .findActivePendingOffersForDriver(eq(driverId), eq("PENDING"), any(Instant.class));
   }
 }

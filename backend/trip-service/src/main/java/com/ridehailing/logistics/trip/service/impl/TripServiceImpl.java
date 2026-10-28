@@ -40,6 +40,7 @@ import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.geom.PrecisionModel;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -72,6 +73,9 @@ public class TripServiceImpl implements TripService {
   private final StringRedisTemplate redisTemplate;
   private final RedisDistributedLockService lockService;
   private final ObjectProvider<TripService> selfProvider;
+
+  @Value("${app.trip.offer-timeout-seconds:120}")
+  private long offerTimeoutSeconds = 120;
 
   @PostConstruct
   void init() {
@@ -197,7 +201,7 @@ public class TripServiceImpl implements TripService {
                     .driverId(driver.driverId())
                     .status("PENDING")
                     .estimatedPickupDistanceMeters((int) Math.round(driver.distanceMeters()))
-                    .expiresAt(Instant.now().plus(Duration.ofSeconds(15)))
+                    .expiresAt(Instant.now().plus(Duration.ofSeconds(offerTimeoutSeconds)))
                     .build();
             offers.add(offer);
           }
@@ -264,11 +268,12 @@ public class TripServiceImpl implements TripService {
           "OFFER_ALREADY_PROCESSED", "Offer is already " + offer.getStatus());
     }
 
-    if (offer.getExpiresAt().isBefore(Instant.now())) {
+    if (offer.getExpiresAt() != null && !offer.getExpiresAt().isAfter(Instant.now())) {
       offer.setStatus("EXPIRED");
       offer.setRespondedAt(Instant.now());
       driverOfferRepository.save(offer);
-      return toOfferResponse(offer);
+      throw BaseDomainException.conflict(
+          "OFFER_EXPIRED", "Lời mời chuyến đi đã hết hạn nhận cuốc (Offer expired)");
     }
 
     if (!accept) {
@@ -333,6 +338,9 @@ public class TripServiceImpl implements TripService {
       offer.setStatus("ACCEPTED");
       offer.setRespondedAt(Instant.now());
       driverOfferRepository.save(offer);
+
+      // Expire remaining competing pending offers for this trip
+      driverOfferRepository.expirePendingOffersByTripIds(List.of(offer.getTripId()), Instant.now());
 
       log.info(
           "Driver ID {} atomically claimed and accepted Trip ID {}", driverId, offer.getTripId());
@@ -600,6 +608,16 @@ public class TripServiceImpl implements TripService {
         t.getPaymentMethod(),
         t.getCreatedAt(),
         t.getCompletedAt());
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<DriverOfferResponse> getPendingOffersForDriver(UUID driverId) {
+    return driverOfferRepository
+        .findActivePendingOffersForDriver(driverId, STATUS_PENDING, Instant.now())
+        .stream()
+        .map(this::toOfferResponse)
+        .toList();
   }
 
   private DriverOfferResponse toOfferResponse(DriverOffer o) {

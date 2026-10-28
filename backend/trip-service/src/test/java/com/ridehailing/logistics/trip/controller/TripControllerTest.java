@@ -7,11 +7,13 @@ import com.ridehailing.logistics.common.domain.enums.PaymentMethod;
 import com.ridehailing.logistics.common.domain.enums.ServiceType;
 import com.ridehailing.logistics.common.domain.enums.TripStatus;
 import com.ridehailing.logistics.common.dto.ApiResponse;
+import com.ridehailing.logistics.trip.dto.DriverOfferResponse;
 import com.ridehailing.logistics.trip.dto.TripDetailResponse;
 import com.ridehailing.logistics.common.exception.BaseDomainException;
 import com.ridehailing.logistics.trip.service.TripService;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -194,5 +196,44 @@ class TripControllerTest {
     assertEquals(200, response.getStatusCode().value());
     assertEquals(new BigDecimal("10000.00"), response.getBody().getData().cancellationFee());
     verify(tripService, times(1)).estimateCancellationFee(tripId, customerId, "CUSTOMER");
+  }
+
+  @Test
+  @DisplayName("getPendingOffers should return list of pending offers for driver")
+  void shouldReturnPendingOffersForDriver() {
+    UUID offerId = UUID.randomUUID();
+    DriverOfferResponse offerResponse =
+        new DriverOfferResponse(
+            offerId,
+            tripId,
+            driverId,
+            "PENDING",
+            300,
+            Instant.now().plusSeconds(60));
+
+    when(tripService.getPendingOffersForDriver(driverId)).thenReturn(List.of(offerResponse));
+
+    ResponseEntity<ApiResponse<List<DriverOfferResponse>>> response =
+        tripController.getPendingOffers(driverId, "DRIVER", "corr-offers");
+
+    assertNotNull(response);
+    assertNotNull(response.getBody());
+    assertEquals(200, response.getStatusCode().value());
+    assertEquals(1, response.getBody().getData().size());
+    assertEquals(offerId, response.getBody().getData().get(0).offerId());
+    verify(tripService, times(1)).getPendingOffersForDriver(driverId);
+  }
+
+  @Test
+  @DisplayName("getPendingOffers should reject non-driver non-admin callers with FORBIDDEN_ACCESS")
+  void shouldRejectCustomerFromGettingPendingOffers() {
+    BaseDomainException ex =
+        assertThrows(
+            BaseDomainException.class,
+            () -> tripController.getPendingOffers(driverId, "CUSTOMER", "corr-forbidden"));
+
+    assertEquals(403, ex.getHttpStatus());
+    assertEquals("FORBIDDEN_ACCESS", ex.getErrorCode());
+    verify(tripService, never()).getPendingOffersForDriver(any());
   }
 }

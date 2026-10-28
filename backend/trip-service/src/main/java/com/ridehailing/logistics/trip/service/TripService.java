@@ -6,6 +6,7 @@ import com.ridehailing.logistics.trip.dto.CreateTripRequest;
 import com.ridehailing.logistics.trip.dto.DriverOfferResponse;
 import com.ridehailing.logistics.trip.dto.TripDetailResponse;
 import com.ridehailing.logistics.trip.dto.response.CancellationFeeResponse;
+import java.util.List;
 import java.util.UUID;
 
 @SuppressWarnings("unused")
@@ -15,6 +16,8 @@ public interface TripService {
   Trip saveInitialTrip(Trip trip);
 
   DriverOfferResponse respondOffer(UUID offerId, UUID driverId, boolean accept);
+
+  List<DriverOfferResponse> getPendingOffersForDriver(UUID driverId);
 
   default TripDetailResponse updateTripStatus(UUID tripId, UUID actorId, TripStatus nextStatus) {
     return updateTripStatus(tripId, actorId, null, nextStatus);

@@ -11,6 +11,7 @@ import com.ridehailing.logistics.trip.dto.TripDetailResponse;
 import com.ridehailing.logistics.trip.dto.response.CancellationFeeResponse;
 import com.ridehailing.logistics.trip.service.TripService;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -99,6 +100,23 @@ public class TripController {
           String correlationId) {
     DriverOfferResponse response = tripService.respondOffer(offerId, driverId, request.accept());
     return ResponseEntity.ok(ApiResponse.success(response, correlationId));
+  }
+
+  @GetMapping("/offers/pending")
+  public ResponseEntity<ApiResponse<List<DriverOfferResponse>>> getPendingOffers(
+      @RequestHeader(SecurityConstants.HEADER_USER_ID) UUID driverId,
+      @RequestHeader(value = SecurityConstants.HEADER_USER_ROLE, required = false) String actorRole,
+      @RequestHeader(value = SecurityConstants.HEADER_CORRELATION_ID, required = false)
+          String correlationId) {
+    if (actorRole != null
+        && !actorRole.isBlank()
+        && !"DRIVER".equalsIgnoreCase(actorRole)
+        && !"ADMIN".equalsIgnoreCase(actorRole)) {
+      throw BaseDomainException.forbidden(
+          "FORBIDDEN_ACCESS", "Only drivers or administrators can view pending offer queues");
+    }
+    List<DriverOfferResponse> offers = tripService.getPendingOffersForDriver(driverId);
+    return ResponseEntity.ok(ApiResponse.success(offers, correlationId));
   }
 
   @GetMapping("/{tripId}/cancellation-fee")

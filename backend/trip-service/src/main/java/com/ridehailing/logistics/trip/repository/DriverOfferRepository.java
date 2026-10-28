@@ -22,7 +22,19 @@ public interface DriverOfferRepository extends JpaRepository<DriverOffer, UUID> 
 
   List<DriverOffer> findByDriverIdAndStatus(UUID driverId, String status);
 
-  @Modifying
+  List<DriverOffer> findByDriverIdAndStatusAndExpiresAtAfter(
+      UUID driverId, String status, Instant now);
+
+  @Query(
+      "SELECT o FROM DriverOffer o JOIN Trip t ON o.tripId = t.id "
+          + "WHERE o.driverId = :driverId AND o.status = :status AND o.expiresAt > :now "
+          + "AND t.status = com.ridehailing.logistics.common.domain.enums.TripStatus.MATCHING")
+  List<DriverOffer> findActivePendingOffersForDriver(
+      @Param("driverId") UUID driverId,
+      @Param("status") String status,
+      @Param("now") Instant now);
+
+  @Modifying(clearAutomatically = true)
   @Transactional
   @Query(
       "UPDATE DriverOffer o SET o.status = 'EXPIRED', o.respondedAt = :now "
@@ -30,10 +42,10 @@ public interface DriverOfferRepository extends JpaRepository<DriverOffer, UUID> 
   void expirePendingOffersByTripIds(
       @Param("tripIds") Collection<UUID> tripIds, @Param("now") Instant now);
 
-  @Modifying
+  @Modifying(clearAutomatically = true)
   @Transactional
   @Query(
       "UPDATE DriverOffer o SET o.status = 'EXPIRED', o.respondedAt = :now "
-          + "WHERE o.status = 'PENDING' AND o.expiresAt < :now")
+          + "WHERE o.status = 'PENDING' AND o.expiresAt <= :now")
   void expireOverdueOffers(@Param("now") Instant now);
 }
