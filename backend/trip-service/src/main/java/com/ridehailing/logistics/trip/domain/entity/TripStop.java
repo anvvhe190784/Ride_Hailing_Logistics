@@ -27,7 +27,7 @@ public class TripStop {
   @Column(name = "stop_sequence", nullable = false)
   private Integer stopSequence;
 
-  @Column(nullable = false, length = 255)
+  @Column(nullable = false)
   private String address;
 
   @Column(nullable = false, precision = 10, scale = 7)

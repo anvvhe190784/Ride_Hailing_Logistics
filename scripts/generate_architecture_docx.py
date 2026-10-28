@@ -185,6 +185,41 @@ def render_content_line(doc, line):
         p.paragraph_format.space_after = Pt(3)
         add_formatted_text(p, stripped)
 
+def handle_code_block_fence(doc, in_code_block, code_block_lang, code_block_lines, line):
+    if in_code_block:
+        title = f"SƠ ĐỒ TRỰC QUAN ({code_block_lang.upper()})" if code_block_lang else "ĐOẠN MÃ LỆNH / SCHEMA"
+        add_code_box(doc, '\n'.join(code_block_lines), title)
+        return False, "", []
+    lang = line.strip()[3:].strip()
+    return True, lang, []
+
+def process_markdown_lines(doc, lines):
+    i = 0
+    in_code_block = False
+    code_block_lines = []
+    code_block_lang = ""
+
+    while i < len(lines):
+        line = lines[i]
+        if line.strip().startswith("```"):
+            in_code_block, code_block_lang, code_block_lines = handle_code_block_fence(
+                doc, in_code_block, code_block_lang, code_block_lines, line
+            )
+            i += 1
+            continue
+
+        if in_code_block:
+            code_block_lines.append(line)
+            i += 1
+            continue
+
+        if line.strip().startswith('|') and i + 1 < len(lines) and lines[i+1].strip().startswith('|'):
+            i = parse_markdown_table(doc, lines, i)
+            continue
+
+        render_content_line(doc, line)
+        i += 1
+
 def setup_document():
     doc = docx.Document()
     for section in doc.sections:
@@ -217,37 +252,7 @@ def main():
         md_content = f.read()
 
     doc = setup_document()
-    lines = md_content.split('\n')
-    i = 0
-    in_code_block = False
-    code_block_lines = []
-    code_block_lang = ""
-
-    while i < len(lines):
-        line = lines[i]
-        if line.strip().startswith("```"):
-            if in_code_block:
-                title = f"SƠ ĐỒ TRỰC QUAN ({code_block_lang.upper()})" if code_block_lang else "ĐOẠN MÃ LỆNH / SCHEMA"
-                add_code_box(doc, '\n'.join(code_block_lines), title)
-                in_code_block = False
-            else:
-                in_code_block = True
-                code_block_lang = line.strip()[3:].strip()
-                code_block_lines = []
-            i += 1
-            continue
-
-        if in_code_block:
-            code_block_lines.append(line)
-            i += 1
-            continue
-
-        if line.strip().startswith('|') and i + 1 < len(lines) and lines[i+1].strip().startswith('|'):
-            i = parse_markdown_table(doc, lines, i)
-            continue
-
-        render_content_line(doc, line)
-        i += 1
+    process_markdown_lines(doc, md_content.split('\n'))
 
     print(f"Saving formatted architecture document to: {OUTPUT_DOCX}")
     os.makedirs(os.path.dirname(OUTPUT_DOCX), exist_ok=True)

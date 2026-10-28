@@ -117,7 +117,7 @@ class TripControllerTest {
     com.ridehailing.logistics.trip.dto.CreateTripRequest req =
         new com.ridehailing.logistics.trip.dto.CreateTripRequest(
             UUID.randomUUID(), "idemp-key-1", PaymentMethod.CASH);
-    when(tripService.createTrip(eq(customerId), eq(req))).thenReturn(tripDetail);
+    when(tripService.createTrip(customerId, req)).thenReturn(tripDetail);
 
     ResponseEntity<ApiResponse<TripDetailResponse>> response =
         tripController.createTrip(customerId, "CUSTOMER", null, req, "corr-create");

@@ -21,7 +21,6 @@ import com.ridehailing.logistics.trip.dto.NearbyDriverResponse;
 import com.ridehailing.logistics.trip.dto.TripDetailResponse;
 import com.ridehailing.logistics.trip.dto.response.CancellationFeeResponse;
 import com.ridehailing.logistics.trip.event.TripCompletedInternalEvent;
-import com.ridehailing.logistics.trip.event.TripEventProducer;
 import com.ridehailing.logistics.trip.repository.DriverOfferRepository;
 import com.ridehailing.logistics.trip.repository.OutboxEventRepository;
 import com.ridehailing.logistics.trip.repository.TripRepository;
@@ -40,9 +39,8 @@ import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.geom.PrecisionModel;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -57,23 +55,23 @@ public class TripServiceImpl implements TripService {
   public static final String REDIS_TRIP_IDEMPOTENCY_LOCK_PREFIX = "lock:trip:idempotency:";
   public static final String REDIS_TRIP_CLAIM_LOCK_PREFIX = "lock:trip:claim:";
 
+  private static final String STATUS_PENDING = "PENDING";
   private static final String STATUS_REJECTED = "REJECTED";
   private static final String ERR_TRIP_NOT_FOUND = "TRIP_NOT_FOUND";
   private static final String MSG_TRIP_NOT_FOUND = "Trip not found";
+  private static final String ERR_ACCESS_DENIED = "ACCESS_DENIED";
 
   private final TripRepository tripRepository;
   private final DriverOfferRepository driverOfferRepository;
   private final PricingClient pricingClient;
   private final LocationClient locationClient;
   private final DriverClient driverClient;
-  private final TripEventProducer eventProducer;
   private final OutboxEventRepository outboxEventRepository;
   private final ObjectMapper objectMapper;
   private final ApplicationEventPublisher applicationEventPublisher;
   private final StringRedisTemplate redisTemplate;
   private final RedisDistributedLockService lockService;
-
-  @Autowired @Lazy private TripService self;
+  private final ObjectProvider<TripService> selfProvider;
 
   @PostConstruct
   void init() {
@@ -83,7 +81,7 @@ public class TripServiceImpl implements TripService {
   }
 
   private TripService getSelf() {
-    return self != null ? self : this;
+    return selfProvider != null ? selfProvider.getIfAvailable(() -> this) : this;
   }
 
   @Override
@@ -258,10 +256,10 @@ public class TripServiceImpl implements TripService {
                 () -> BaseDomainException.notFound("OFFER_NOT_FOUND", "Driver offer not found"));
 
     if (!offer.getDriverId().equals(driverId)) {
-      throw BaseDomainException.badRequest("ACCESS_DENIED", "Offer does not belong to this driver");
+      throw BaseDomainException.badRequest(ERR_ACCESS_DENIED, "Offer does not belong to this driver");
     }
 
-    if (!"PENDING".equals(offer.getStatus())) {
+    if (!STATUS_PENDING.equals(offer.getStatus())) {
       throw BaseDomainException.conflict(
           "OFFER_ALREADY_PROCESSED", "Offer is already " + offer.getStatus());
     }
@@ -282,7 +280,8 @@ public class TripServiceImpl implements TripService {
 
     String lockKey = REDIS_TRIP_CLAIM_LOCK_PREFIX + offer.getTripId();
     String ownerToken = driverId + ":" + UUID.randomUUID();
-    if (lockService != null && !lockService.tryAcquire(lockKey, ownerToken, Duration.ofSeconds(5))) {
+    if (lockService != null
+        && !lockService.tryAcquire(lockKey, ownerToken, Duration.ofSeconds(5))) {
       offer.setStatus(STATUS_REJECTED);
       offer.setRespondedAt(Instant.now());
       driverOfferRepository.save(offer);
@@ -292,62 +291,66 @@ public class TripServiceImpl implements TripService {
     }
 
     try {
-      // Check if driver is already on active trip
-      boolean hasActiveTrip =
-          tripRepository.existsByDriverIdAndStatusIn(
-              driverId,
-              List.of(
-                  TripStatus.ACCEPTED,
-                  TripStatus.PICKING_UP,
-                  TripStatus.ARRIVED,
-                  TripStatus.IN_TRIP));
-      if (hasActiveTrip) {
-        offer.setStatus(STATUS_REJECTED);
-        offer.setRespondedAt(Instant.now());
-        driverOfferRepository.save(offer);
-        throw BaseDomainException.conflict(
-            "DRIVER_ALREADY_ASSIGNED", "Driver is already assigned to an active trip");
-      }
-
-      try {
-        // Atomic CAS update: claim trip
-        int updatedRows =
-            tripRepository.claimTripAtomically(offer.getTripId(), driverId, Instant.now());
-        if (updatedRows == 0) {
-          offer.setStatus(STATUS_REJECTED);
-          offer.setRespondedAt(Instant.now());
-          driverOfferRepository.save(offer);
-          throw BaseDomainException.conflict(
-              "TRIP_ALREADY_ASSIGNED",
-              "Trip is no longer available or was already accepted by another driver");
-        }
-
-        offer.setStatus("ACCEPTED");
-        offer.setRespondedAt(Instant.now());
-        driverOfferRepository.save(offer);
-
-        log.info(
-            "Driver ID {} atomically claimed and accepted Trip ID {}", driverId, offer.getTripId());
-        return toOfferResponse(offer);
-      } catch (DataIntegrityViolationException ex) {
-        log.warn(
-            "DataIntegrityViolationException claiming trip {}: {}",
-            offer.getTripId(),
-            ex.getMessage());
-        offer.setStatus(STATUS_REJECTED);
-        offer.setRespondedAt(Instant.now());
-        try {
-          driverOfferRepository.save(offer);
-        } catch (Exception ignored) {
-          // Ignored if transaction marked rollback
-        }
-        throw BaseDomainException.conflict(
-            "TRIP_ALREADY_CLAIMED", "Chuyến đi đã được tài xế khác tiếp nhận");
-      }
+      return attemptClaimTrip(offer, driverId);
     } finally {
       if (lockService != null) {
         lockService.release(lockKey, ownerToken);
       }
+    }
+  }
+
+  private DriverOfferResponse attemptClaimTrip(DriverOffer offer, UUID driverId) {
+    // Check if driver is already on active trip
+    boolean hasActiveTrip =
+        tripRepository.existsByDriverIdAndStatusIn(
+            driverId,
+            List.of(
+                TripStatus.ACCEPTED,
+                TripStatus.PICKING_UP,
+                TripStatus.ARRIVED,
+                TripStatus.IN_TRIP));
+    if (hasActiveTrip) {
+      offer.setStatus(STATUS_REJECTED);
+      offer.setRespondedAt(Instant.now());
+      driverOfferRepository.save(offer);
+      throw BaseDomainException.conflict(
+          "DRIVER_ALREADY_ASSIGNED", "Driver is already assigned to an active trip");
+    }
+
+    try {
+      // Atomic CAS update: claim trip
+      int updatedRows =
+          tripRepository.claimTripAtomically(offer.getTripId(), driverId, Instant.now());
+      if (updatedRows == 0) {
+        offer.setStatus(STATUS_REJECTED);
+        offer.setRespondedAt(Instant.now());
+        driverOfferRepository.save(offer);
+        throw BaseDomainException.conflict(
+            "TRIP_ALREADY_ASSIGNED",
+            "Trip is no longer available or was already accepted by another driver");
+      }
+
+      offer.setStatus("ACCEPTED");
+      offer.setRespondedAt(Instant.now());
+      driverOfferRepository.save(offer);
+
+      log.info(
+          "Driver ID {} atomically claimed and accepted Trip ID {}", driverId, offer.getTripId());
+      return toOfferResponse(offer);
+    } catch (DataIntegrityViolationException ex) {
+      log.warn(
+          "DataIntegrityViolationException claiming trip {}: {}",
+          offer.getTripId(),
+          ex.getMessage());
+      offer.setStatus(STATUS_REJECTED);
+      offer.setRespondedAt(Instant.now());
+      try {
+        driverOfferRepository.save(offer);
+      } catch (Exception ignored) {
+        // Ignored if transaction marked rollback
+      }
+      throw BaseDomainException.conflict(
+          "TRIP_ALREADY_CLAIMED", "Chuyến đi đã được tài xế khác tiếp nhận");
     }
   }
 
@@ -388,12 +391,17 @@ public class TripServiceImpl implements TripService {
   @Override
   @Transactional
   public Trip updateTripStatusInDb(UUID tripId, UUID actorId, TripStatus nextStatus) {
-    return updateTripStatusInDb(tripId, actorId, null, nextStatus);
+    return doUpdateTripStatusInDb(tripId, actorId, null, nextStatus);
   }
 
   @Override
   @Transactional
   public Trip updateTripStatusInDb(
+      UUID tripId, UUID actorId, String actorRole, TripStatus nextStatus) {
+    return doUpdateTripStatusInDb(tripId, actorId, actorRole, nextStatus);
+  }
+
+  private Trip doUpdateTripStatusInDb(
       UUID tripId, UUID actorId, String actorRole, TripStatus nextStatus) {
     Trip trip =
         tripRepository
@@ -408,23 +416,9 @@ public class TripServiceImpl implements TripService {
         actorRole != null
             && ("ADMIN".equalsIgnoreCase(actorRole) || "SUPPORT_STAFF".equalsIgnoreCase(actorRole));
 
-    if (nextStatus == TripStatus.CANCELLED) {
-      if (!isAdminOrSupport
-          && !actorId.equals(trip.getCustomerId())
-          && !actorId.equals(trip.getDriverId())) {
-        throw BaseDomainException.forbidden(
-            "ACCESS_DENIED", "Only trip participants can cancel this trip");
-      }
-    } else {
-      if (!isAdminOrSupport
-          && (trip.getDriverId() == null || !actorId.equals(trip.getDriverId()))) {
-        throw BaseDomainException.forbidden(
-            "ACCESS_DENIED", "Only the assigned driver can update trip progress");
-      }
-    }
+    verifyActorAuthorization(trip, actorId, actorRole, nextStatus, isAdminOrSupport);
 
     Instant now = Instant.now();
-
     TripStatus currentStatus = trip.getStatus();
 
     // When transitioning from MATCHING to CANCELLED, expire pending driver offers
@@ -434,11 +428,43 @@ public class TripServiceImpl implements TripService {
 
     BigDecimal calculatedFee = BigDecimal.ZERO;
     if (nextStatus == TripStatus.CANCELLED) {
-      calculatedFee = calculateCancellationFee(trip, currentStatus, actorId, actorRole);
+      calculatedFee = calculateCancellationFee(trip, currentStatus, actorRole);
     }
 
     trip.setStatus(nextStatus);
+    applyStatusTimestampsAndSideEffects(
+        trip, nextStatus, actorId, isAdminOrSupport, calculatedFee, now);
 
+    trip = tripRepository.save(trip);
+    log.info("Trip ID {} transitioned to status {}", tripId, nextStatus);
+    return trip;
+  }
+
+  private void verifyActorAuthorization(
+      Trip trip, UUID actorId, String actorRole, TripStatus nextStatus, boolean isAdminOrSupport) {
+    if (nextStatus == TripStatus.CANCELLED) {
+      if (!isAdminOrSupport
+          && !actorId.equals(trip.getCustomerId())
+          && !actorId.equals(trip.getDriverId())) {
+        throw BaseDomainException.forbidden(
+            ERR_ACCESS_DENIED, "Only trip participants can cancel this trip");
+      }
+    } else {
+      if (!isAdminOrSupport
+          && (trip.getDriverId() == null || !actorId.equals(trip.getDriverId()))) {
+        throw BaseDomainException.forbidden(
+            ERR_ACCESS_DENIED, "Only the assigned driver can update trip progress");
+      }
+    }
+  }
+
+  private void applyStatusTimestampsAndSideEffects(
+      Trip trip,
+      TripStatus nextStatus,
+      UUID actorId,
+      boolean isAdminOrSupport,
+      BigDecimal calculatedFee,
+      Instant now) {
     if (nextStatus == TripStatus.ARRIVED) {
       trip.setArrivedAt(now);
     } else if (nextStatus == TripStatus.IN_TRIP) {
@@ -446,10 +472,8 @@ public class TripServiceImpl implements TripService {
       trip.setInTripAt(now);
     } else if (nextStatus == TripStatus.COMPLETED) {
       trip.setCompletedAt(now);
-
       // Persist Transactional Outbox Event within the same DB transaction
       saveTripCompletedOutboxEvent(trip);
-
       // Publish Spring internal event; listener will publish Kafka event AFTER_COMMIT
       applicationEventPublisher.publishEvent(new TripCompletedInternalEvent(trip));
     } else if (nextStatus == TripStatus.CANCELLED) {
@@ -461,10 +485,6 @@ public class TripServiceImpl implements TripService {
             isAdminOrSupport ? "Cancelled by staff/admin " + actorId : "Cancelled by " + actorId);
       }
     }
-
-    trip = tripRepository.save(trip);
-    log.info("Trip ID {} transitioned to status {}", tripId, nextStatus);
-    return trip;
   }
 
   @Override
@@ -493,19 +513,21 @@ public class TripServiceImpl implements TripService {
             .orElseThrow(
                 () -> BaseDomainException.notFound(ERR_TRIP_NOT_FOUND, MSG_TRIP_NOT_FOUND));
 
-    BigDecimal fee = calculateCancellationFee(trip, trip.getStatus(), actorId, actorRole);
-    boolean gracePeriodActive = isGracePeriodActive(trip, trip.getStatus(), actorRole);
-    String policy =
-        fee.compareTo(BigDecimal.ZERO) == 0
-            ? (gracePeriodActive
-                ? "Miễn phí hủy trong thời gian ân hạn 3 phút"
-                : "Miễn phí hủy chuyến")
-            : "Áp dụng phí phạt hủy chuyến theo chính sách FR-CAN-003";
+    BigDecimal fee = calculateCancellationFee(trip, trip.getStatus(), actorRole);
+    boolean gracePeriodActive = isGracePeriodActive(trip, trip.getStatus());
+    String policy;
+    if (fee.compareTo(BigDecimal.ZERO) != 0) {
+      policy = "Áp dụng phí phạt hủy chuyến theo chính sách FR-CAN-003";
+    } else if (gracePeriodActive) {
+      policy = "Miễn phí hủy trong thời gian ân hạn 3 phút";
+    } else {
+      policy = "Miễn phí hủy chuyến";
+    }
 
     return new CancellationFeeResponse(tripId, fee, "VND", gracePeriodActive, policy);
   }
 
-  private boolean isGracePeriodActive(Trip trip, TripStatus currentStatus, String actorRole) {
+  private boolean isGracePeriodActive(Trip trip, TripStatus currentStatus) {
     if (currentStatus == TripStatus.MATCHING || currentStatus == TripStatus.CREATED) {
       return true;
     }
@@ -517,7 +539,7 @@ public class TripServiceImpl implements TripService {
   }
 
   private BigDecimal calculateCancellationFee(
-      Trip trip, TripStatus currentStatus, UUID actorId, String actorRole) {
+      Trip trip, TripStatus currentStatus, String actorRole) {
     // Staff/Admin or Driver cancellations do not incur penalty on customer
     if ("ADMIN".equalsIgnoreCase(actorRole) || "DRIVER".equalsIgnoreCase(actorRole)) {
       return CANCELLATION_FEE_ZERO;
@@ -534,10 +556,11 @@ public class TripServiceImpl implements TripService {
     }
 
     // Accepted or Picking Up: Check 3-minute grace period
+    if ((currentStatus == TripStatus.ACCEPTED || currentStatus == TripStatus.PICKING_UP)
+        && isGracePeriodActive(trip, currentStatus)) {
+      return CANCELLATION_FEE_ZERO;
+    }
     if (currentStatus == TripStatus.ACCEPTED || currentStatus == TripStatus.PICKING_UP) {
-      if (isGracePeriodActive(trip, currentStatus, actorRole)) {
-        return CANCELLATION_FEE_ZERO;
-      }
       return CANCELLATION_FEE_PICKING_UP;
     }
 

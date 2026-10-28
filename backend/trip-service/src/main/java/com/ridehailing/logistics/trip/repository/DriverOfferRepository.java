@@ -27,7 +27,7 @@ public interface DriverOfferRepository extends JpaRepository<DriverOffer, UUID> 
   @Query(
       "UPDATE DriverOffer o SET o.status = 'EXPIRED', o.respondedAt = :now "
           + "WHERE o.tripId IN :tripIds AND o.status = 'PENDING'")
-  int expirePendingOffersByTripIds(
+  void expirePendingOffersByTripIds(
       @Param("tripIds") Collection<UUID> tripIds, @Param("now") Instant now);
 
   @Modifying
@@ -35,5 +35,5 @@ public interface DriverOfferRepository extends JpaRepository<DriverOffer, UUID> 
   @Query(
       "UPDATE DriverOffer o SET o.status = 'EXPIRED', o.respondedAt = :now "
           + "WHERE o.status = 'PENDING' AND o.expiresAt < :now")
-  int expireOverdueOffers(@Param("now") Instant now);
+  void expireOverdueOffers(@Param("now") Instant now);
 }

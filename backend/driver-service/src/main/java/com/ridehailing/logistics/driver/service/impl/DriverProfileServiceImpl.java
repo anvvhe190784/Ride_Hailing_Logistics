@@ -55,13 +55,7 @@ public class DriverProfileServiceImpl implements DriverProfileService {
     profile.setReviewStatus(DriverReviewStatus.PENDING_REVIEW);
 
     profile = driverProfileRepository.save(profile);
-    if (redisTemplate != null) {
-      try {
-        redisTemplate.delete(REDIS_PROFILE_CACHE_PREFIX + driverId);
-      } catch (Exception e) {
-        log.warn("Failed to evict driver profile from Redis cache for driverId {}: {}", driverId, e.getMessage());
-      }
-    }
+    evictDriverProfileCache(driverId);
     log.info("Driver ID {} submitted KYC, status set to PENDING_REVIEW", driverId);
     return driverMapper.toResponse(profile);
   }
@@ -81,13 +75,7 @@ public class DriverProfileServiceImpl implements DriverProfileService {
     profile.setStatusReason("Verified successfully by reviewer");
 
     profile = driverProfileRepository.save(profile);
-    if (redisTemplate != null) {
-      try {
-        redisTemplate.delete(REDIS_PROFILE_CACHE_PREFIX + driverId);
-      } catch (Exception e) {
-        log.warn("Failed to evict driver profile from Redis cache for driverId {}: {}", driverId, e.getMessage());
-      }
-    }
+    evictDriverProfileCache(driverId);
     log.info("Driver ID {} approved by Reviewer ID {}", driverId, reviewerId);
     return driverMapper.toResponse(profile);
   }
@@ -118,6 +106,12 @@ public class DriverProfileServiceImpl implements DriverProfileService {
 
     profile.setAvailabilityStatus(status);
     profile = driverProfileRepository.save(profile);
+    evictDriverProfileCache(driverId);
+    log.info("Driver ID {} updated availability to {}", driverId, status);
+    return driverMapper.toResponse(profile);
+  }
+
+  private void evictDriverProfileCache(UUID driverId) {
     if (redisTemplate != null) {
       try {
         redisTemplate.delete(REDIS_PROFILE_CACHE_PREFIX + driverId);
@@ -125,8 +119,6 @@ public class DriverProfileServiceImpl implements DriverProfileService {
         log.warn("Failed to evict driver profile from Redis cache for driverId {}: {}", driverId, e.getMessage());
       }
     }
-    log.info("Driver ID {} updated availability to {}", driverId, status);
-    return driverMapper.toResponse(profile);
   }
 
   @Override

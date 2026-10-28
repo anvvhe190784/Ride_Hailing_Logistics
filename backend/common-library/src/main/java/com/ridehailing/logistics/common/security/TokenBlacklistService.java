@@ -6,14 +6,14 @@ import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 
 /**
  * Pure Redis-backed blacklist service for revoked JWT access tokens and JTIs. Stores token
  * identifiers exclusively in Redis with TTL matching their natural expiration (Zero RAM cache).
  */
 @Slf4j
-@Component
+@Service
 public class TokenBlacklistService {
 
   public static final String REDIS_BLACKLIST_PREFIX = "blacklist:jwt:";

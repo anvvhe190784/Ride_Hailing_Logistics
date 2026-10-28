@@ -25,6 +25,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @RequiredArgsConstructor
 public class TripCleanupScheduler {
 
+  private static final String ACTOR_ROLE_SYSTEM = "SYSTEM";
   private static final String CANCEL_REASON = "EXPIRED_NO_DRIVER_FOUND";
   private static final Duration STALE_THRESHOLD = Duration.ofMinutes(5);
   private static final String DRIVER_NO_SHOW_REASON = "DRIVER_NO_SHOW";
@@ -68,7 +69,7 @@ public class TripCleanupScheduler {
               .fromStatus(TripStatus.MATCHING.name())
               .toStatus(TripStatus.CANCELLED.name())
               .actorId(null)
-              .actorRole("SYSTEM")
+              .actorRole(ACTOR_ROLE_SYSTEM)
               .reason(CANCEL_REASON)
               .createdAt(now)
               .build();
@@ -109,7 +110,7 @@ public class TripCleanupScheduler {
                         .fromStatus(previousStatus != null ? previousStatus.name() : null)
                         .toStatus(TripStatus.CANCELLED.name())
                         .actorId(null)
-                        .actorRole("SYSTEM")
+                        .actorRole(ACTOR_ROLE_SYSTEM)
                         .reason(DRIVER_NO_SHOW_REASON)
                         .createdAt(now)
                         .build();
@@ -174,7 +175,7 @@ public class TripCleanupScheduler {
                             previousStatus != null ? previousStatus.name() : TripStatus.IN_TRIP.name())
                         .toStatus(TripStatus.CANCELLED.name())
                         .actorId(null)
-                        .actorRole("SYSTEM")
+                        .actorRole(ACTOR_ROLE_SYSTEM)
                         .reason(STALE_IN_TRIP_REASON)
                         .createdAt(now)
                         .build();

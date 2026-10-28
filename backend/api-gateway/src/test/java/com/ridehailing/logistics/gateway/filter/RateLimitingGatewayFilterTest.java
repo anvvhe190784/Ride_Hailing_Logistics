@@ -1,7 +1,6 @@
 package com.ridehailing.logistics.gateway.filter;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -43,9 +42,9 @@ class RateLimitingGatewayFilterTest {
               return counters.computeIfAbsent(key, k -> new AtomicLong(0)).incrementAndGet();
             });
 
-    // Burst capacity 2, replenish rate 1 token/sec
+    // Burst capacity 2
     rateLimitingFilter =
-        new RateLimitingGatewayFilter(true, 1.0, 2.0, objectMapper, redisTemplate);
+        new RateLimitingGatewayFilter(true, 2.0, objectMapper, redisTemplate);
   }
 
   @Test
@@ -117,7 +116,7 @@ class RateLimitingGatewayFilterTest {
   @Test
   void shouldSkipWhenRateLimiterDisabled() {
     RateLimitingGatewayFilter disabledFilter =
-        new RateLimitingGatewayFilter(false, 1.0, 1.0, objectMapper, redisTemplate);
+        new RateLimitingGatewayFilter(false, 1.0, objectMapper, redisTemplate);
 
     MockServerHttpRequest request =
         MockServerHttpRequest.post("/api/v1/auth/login")

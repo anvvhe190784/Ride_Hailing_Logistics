@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ridehailing.logistics.common.dto.ApiResponse;
 import com.ridehailing.logistics.common.security.SecurityConstants;
+import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
@@ -34,39 +35,34 @@ public class RateLimitingGatewayFilter implements GlobalFilter, Ordered {
       List.of("/api/v1/auth", "/api/v1/trips", "/api/v1/pricing");
 
   private final boolean enabled;
-  private final double replenishRate;
   private final double burstCapacity;
   private final ObjectMapper objectMapper;
   private final StringRedisTemplate redisTemplate;
 
   public RateLimitingGatewayFilter() {
-    this(true, 50.0, 100.0, new ObjectMapper(), null);
+    this(true, 100.0, new ObjectMapper(), null);
   }
 
   public RateLimitingGatewayFilter(
       @Value("${app.gateway.rate-limit.enabled:true}") boolean enabled,
-      @Value("${app.gateway.rate-limit.replenish-rate:50}") double replenishRate,
       @Value("${app.gateway.rate-limit.burst-capacity:100}") double burstCapacity) {
-    this(enabled, replenishRate, burstCapacity, new ObjectMapper(), null);
+    this(enabled, burstCapacity, new ObjectMapper(), null);
   }
 
   public RateLimitingGatewayFilter(
       boolean enabled,
-      double replenishRate,
       double burstCapacity,
       ObjectMapper objectMapper) {
-    this(enabled, replenishRate, burstCapacity, objectMapper, null);
+    this(enabled, burstCapacity, objectMapper, null);
   }
 
   @Autowired
   public RateLimitingGatewayFilter(
       @Value("${app.gateway.rate-limit.enabled:true}") boolean enabled,
-      @Value("${app.gateway.rate-limit.replenish-rate:50}") double replenishRate,
       @Value("${app.gateway.rate-limit.burst-capacity:100}") double burstCapacity,
       @Autowired(required = false) ObjectMapper objectMapper,
       @Autowired(required = false) StringRedisTemplate redisTemplate) {
     this.enabled = enabled;
-    this.replenishRate = replenishRate;
     this.burstCapacity = burstCapacity;
     this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
     this.redisTemplate = redisTemplate;
@@ -127,8 +123,9 @@ public class RateLimitingGatewayFilter implements GlobalFilter, Ordered {
       return "ip:" + xForwardedFor.split(",")[0].trim();
     }
 
-    if (request.getRemoteAddress() != null && request.getRemoteAddress().getAddress() != null) {
-      return "ip:" + request.getRemoteAddress().getAddress().getHostAddress();
+    InetSocketAddress remoteAddress = request.getRemoteAddress();
+    if (remoteAddress != null && remoteAddress.getAddress() != null) {
+      return "ip:" + remoteAddress.getAddress().getHostAddress();
     }
 
     return "ip:anonymous";

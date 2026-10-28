@@ -1,8 +1,5 @@
 package com.ridehailing.logistics.payment.event;
 
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -63,11 +60,11 @@ class TripCompletedConsumerTest {
 
     verify(paymentService, times(1))
         .processTripPayment(
-            eq(tripId),
-            eq(customerId),
-            eq(driverId),
-            eq(new BigDecimal("75000.00")),
-            eq(PaymentMethod.CASH),
-            eq("PAY-TRIP-" + tripId));
+            tripId,
+            customerId,
+            driverId,
+            new BigDecimal("75000.00"),
+            PaymentMethod.CASH,
+            "PAY-TRIP-" + tripId);
   }
 }

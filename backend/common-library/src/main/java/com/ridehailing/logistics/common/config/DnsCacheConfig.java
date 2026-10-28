@@ -9,9 +9,11 @@ import org.springframework.context.annotation.Configuration;
  * Enforces dynamic DNS cache TTL for JVM containers in Kubernetes. By default, JVM caches DNS
  * lookups forever (TTL=-1), causing stale IP routing when downstream pods restart or scale.
  */
-@Configuration
+@Configuration(proxyBeanMethods = false)
 public class DnsCacheConfig {
   private static final Logger log = LoggerFactory.getLogger(DnsCacheConfig.class);
+
+  private DnsCacheConfig() {}
 
   static {
     // 30 seconds cache TTL for successful lookups

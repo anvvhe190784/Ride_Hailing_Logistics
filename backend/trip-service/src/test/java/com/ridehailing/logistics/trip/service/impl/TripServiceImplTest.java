@@ -21,7 +21,6 @@ import com.ridehailing.logistics.trip.dto.NearbyDriverResponse;
 import com.ridehailing.logistics.trip.dto.TripDetailResponse;
 import com.ridehailing.logistics.trip.dto.response.CancellationFeeResponse;
 import com.ridehailing.logistics.trip.event.TripCompletedInternalEvent;
-import com.ridehailing.logistics.trip.event.TripEventProducer;
 import com.ridehailing.logistics.trip.repository.DriverOfferRepository;
 import com.ridehailing.logistics.trip.repository.OutboxEventRepository;
 import com.ridehailing.logistics.trip.repository.TripRepository;
@@ -58,13 +57,12 @@ class TripServiceImplTest {
   @Mock private PricingClient pricingClient;
   @Mock private LocationClient locationClient;
   @Mock private DriverClient driverClient;
-  @Mock private TripEventProducer eventProducer;
   @Mock private OutboxEventRepository outboxEventRepository;
   @Mock private ApplicationEventPublisher applicationEventPublisher;
   @Mock private StringRedisTemplate redisTemplate;
   @Mock private ValueOperations<String, String> valueOperations;
   @Mock private RedisDistributedLockService lockService;
-  @Spy private ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+  @Spy private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
   @InjectMocks private TripServiceImpl tripService;
 
@@ -130,7 +128,7 @@ class TripServiceImplTest {
             new NearbyDriverResponse(driverId1, 21.0310, 105.8510, 150.0),
             new NearbyDriverResponse(driverId2, 21.0320, 105.8520, 300.0));
 
-    when(locationClient.getNearbyDrivers(eq(21.0300), eq(105.8500), eq(3000.0), eq(5)))
+    when(locationClient.getNearbyDrivers(21.0300, 105.8500, 3000.0, 5))
         .thenReturn(ApiResponse.success(nearbyDrivers, "corr-2"));
 
     TripDetailResponse result = tripService.createTrip(customerId, request);

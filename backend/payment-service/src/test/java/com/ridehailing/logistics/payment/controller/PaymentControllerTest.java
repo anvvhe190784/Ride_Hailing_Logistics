@@ -118,10 +118,11 @@ class PaymentControllerTest {
   @Test
   @DisplayName("Empty or customer role should be rejected on wallet statement")
   void shouldRejectEmptyRoleFromGettingStatement() {
+    org.springframework.data.domain.Pageable pageable = PageRequest.of(0, 10);
     BaseDomainException ex =
         assertThrows(
             BaseDomainException.class,
-            () -> paymentController.getMyWalletStatement(driverId, "", PageRequest.of(0, 10), "corr-5"));
+            () -> paymentController.getMyWalletStatement(driverId, "", pageable, "corr-5"));
 
     assertEquals(403, ex.getHttpStatus());
     assertEquals("FORBIDDEN_ACCESS", ex.getErrorCode());

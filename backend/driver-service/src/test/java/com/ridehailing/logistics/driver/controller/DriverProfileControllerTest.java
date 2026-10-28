@@ -9,8 +9,6 @@ import com.ridehailing.logistics.common.dto.ApiResponse;
 import com.ridehailing.logistics.common.dto.DriverProfileResponse;
 import com.ridehailing.logistics.common.exception.BaseDomainException;
 import com.ridehailing.logistics.driver.service.DriverProfileService;
-import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

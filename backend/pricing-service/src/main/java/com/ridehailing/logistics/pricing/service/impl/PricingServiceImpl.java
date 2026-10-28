@@ -31,6 +31,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class PricingServiceImpl implements PricingService {
 
+  private static final String ERR_QUOTE_NOT_FOUND = "QUOTE_NOT_FOUND";
+  private static final String MSG_FARE_QUOTE_NOT_FOUND = "Fare quote not found";
+
   public static final String REDIS_RULE_CACHE_PREFIX = "cache:pricing:rule:";
   public static final String REDIS_QUOTE_IDEMPOTENCY_PREFIX = "idempotency:pricing:quote:";
   public static final String REDIS_SURGE_DEMAND_PREFIX = "surge:demand:";
@@ -69,12 +72,17 @@ public class PricingServiceImpl implements PricingService {
   @Override
   @Transactional
   public FareQuoteResponse createQuote(UUID customerId, FareEstimateRequest request) {
-    return createQuote(customerId, request, null);
+    return doCreateQuote(customerId, request, null);
   }
 
   @Override
   @Transactional
   public FareQuoteResponse createQuote(
+      UUID customerId, FareEstimateRequest request, String idempotencyKey) {
+    return doCreateQuote(customerId, request, idempotencyKey);
+  }
+
+  private FareQuoteResponse doCreateQuote(
       UUID customerId, FareEstimateRequest request, String idempotencyKey) {
     if (idempotencyKey != null && !idempotencyKey.isBlank() && redisTemplate != null) {
       try {
@@ -231,17 +239,21 @@ public class PricingServiceImpl implements PricingService {
   @Override
   @Transactional(readOnly = true)
   public FareQuoteResponse getQuote(UUID quoteId) {
-    return getQuote(quoteId, null, null);
+    return doGetQuote(quoteId, null, null);
   }
 
   @Override
   @Transactional(readOnly = true)
   public FareQuoteResponse getQuote(UUID quoteId, UUID requesterId, String requesterRole) {
+    return doGetQuote(quoteId, requesterId, requesterRole);
+  }
+
+  private FareQuoteResponse doGetQuote(UUID quoteId, UUID requesterId, String requesterRole) {
     FareQuote quote =
         fareQuoteRepository
             .findById(quoteId)
             .orElseThrow(
-                () -> BaseDomainException.notFound("QUOTE_NOT_FOUND", "Fare quote not found"));
+                () -> BaseDomainException.notFound(ERR_QUOTE_NOT_FOUND, MSG_FARE_QUOTE_NOT_FOUND));
 
     if (requesterId != null
         && !"ADMIN".equalsIgnoreCase(requesterRole)
@@ -264,7 +276,7 @@ public class PricingServiceImpl implements PricingService {
           fareQuoteRepository
               .findById(quoteId)
               .orElseThrow(
-                  () -> BaseDomainException.notFound("QUOTE_NOT_FOUND", "Fare quote not found"));
+                  () -> BaseDomainException.notFound(ERR_QUOTE_NOT_FOUND, MSG_FARE_QUOTE_NOT_FOUND));
 
       if (!existing.getCustomerId().equals(customerId)) {
         throw BaseDomainException.forbidden(
@@ -288,7 +300,7 @@ public class PricingServiceImpl implements PricingService {
         fareQuoteRepository
             .findById(quoteId)
             .orElseThrow(
-                () -> BaseDomainException.notFound("QUOTE_NOT_FOUND", "Fare quote not found"));
+                () -> BaseDomainException.notFound(ERR_QUOTE_NOT_FOUND, MSG_FARE_QUOTE_NOT_FOUND));
 
     log.info("Fare quote {} successfully consumed for customer {}", quoteId, customerId);
 

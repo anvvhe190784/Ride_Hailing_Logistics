@@ -24,7 +24,6 @@ import org.springframework.data.geo.Circle;
 import org.springframework.data.geo.Distance;
 import org.springframework.data.geo.GeoResult;
 import org.springframework.data.geo.GeoResults;
-import org.springframework.data.geo.Metrics;
 import org.springframework.data.redis.connection.RedisGeoCommands;
 import org.springframework.data.redis.connection.RedisGeoCommands.GeoRadiusCommandArgs;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -35,6 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class LocationServiceImpl implements LocationService {
 
+  public static final String REDIS_GEO_DRIVERS_AVAILABLE = "geo:drivers:available";
   private static final String REDIS_LOCATION_KEY_PREFIX = "driver:location:";
   private final DriverLatestLocationRepository locationRepository;
   private final StringRedisTemplate redisTemplate;
@@ -125,12 +125,12 @@ public class LocationServiceImpl implements LocationService {
         redisTemplate
             .opsForGeo()
             .add(
-                "geo:drivers:available",
+                REDIS_GEO_DRIVERS_AVAILABLE,
                 new org.springframework.data.geo.Point(
                     request.longitude().doubleValue(), request.latitude().doubleValue()),
                 driverId.toString());
       } else {
-        redisTemplate.opsForGeo().remove("geo:drivers:available", driverId.toString());
+        redisTemplate.opsForGeo().remove(REDIS_GEO_DRIVERS_AVAILABLE, driverId.toString());
       }
 
       // Redis driver heartbeat key (TTL 60s)
@@ -157,7 +157,7 @@ public class LocationServiceImpl implements LocationService {
   @Override
   public List<NearbyDriverResponse> findNearbyDrivers(
       double latitude, double longitude, double radiusMeters, int limit) {
-    int safeLimit = Math.max(1, Math.min(limit, 100));
+    int safeLimit = Math.clamp(limit, 1, 100);
 
     // Step 1: Attempt to query Redis GEO for available drivers within radius
     try {
@@ -173,33 +173,14 @@ public class LocationServiceImpl implements LocationService {
               .limit(safeLimit);
 
       GeoResults<RedisGeoCommands.GeoLocation<String>> geoResults =
-          redisTemplate.opsForGeo().radius("geo:drivers:available", circle, args);
+          redisTemplate.opsForGeo().radius(REDIS_GEO_DRIVERS_AVAILABLE, circle, args);
 
       if (geoResults != null && !geoResults.getContent().isEmpty()) {
         List<NearbyDriverResponse> nearbyDrivers = new ArrayList<>();
         for (GeoResult<RedisGeoCommands.GeoLocation<String>> result : geoResults) {
-          if (result == null
-              || result.getContent() == null
-              || result.getContent().getName() == null) {
-            continue;
-          }
-          String driverIdStr = result.getContent().getName();
-          String heartbeatKey = "driver:heartbeat:" + driverIdStr;
-          // Check if driver heartbeat (60s TTL) is still active
-          if (Boolean.TRUE.equals(redisTemplate.hasKey(heartbeatKey))) {
-            UUID driverUuid;
-            try {
-              driverUuid = UUID.fromString(driverIdStr);
-            } catch (IllegalArgumentException e) {
-              continue;
-            }
-            org.springframework.data.geo.Point pt = result.getContent().getPoint();
-            double driverLng = pt != null ? pt.getX() : longitude;
-            double driverLat = pt != null ? pt.getY() : latitude;
-            double distance =
-                result.getDistance() != null ? result.getDistance().getValue() : 0.0;
-            nearbyDrivers.add(
-                new NearbyDriverResponse(driverUuid, driverLat, driverLng, distance));
+          NearbyDriverResponse driver = mapGeoResultToNearbyDriver(result, latitude, longitude);
+          if (driver != null) {
+            nearbyDrivers.add(driver);
           }
         }
         if (!nearbyDrivers.isEmpty()) {
@@ -223,5 +204,27 @@ public class LocationServiceImpl implements LocationService {
                 new NearbyDriverResponse(
                     p.getDriverId(), p.getLatitude(), p.getLongitude(), p.getDistanceMeters()))
         .toList();
+  }
+
+  private NearbyDriverResponse mapGeoResultToNearbyDriver(
+      GeoResult<RedisGeoCommands.GeoLocation<String>> result, double defaultLat, double defaultLng) {
+    if (result == null || result.getContent() == null || result.getContent().getName() == null) {
+      return null;
+    }
+    String driverIdStr = result.getContent().getName();
+    String heartbeatKey = "driver:heartbeat:" + driverIdStr;
+    if (!Boolean.TRUE.equals(redisTemplate.hasKey(heartbeatKey))) {
+      return null;
+    }
+    try {
+      UUID driverUuid = UUID.fromString(driverIdStr);
+      org.springframework.data.geo.Point pt = result.getContent().getPoint();
+      double driverLng = pt != null ? pt.getX() : defaultLng;
+      double driverLat = pt != null ? pt.getY() : defaultLat;
+      double distance = result.getDistance() != null ? result.getDistance().getValue() : 0.0;
+      return new NearbyDriverResponse(driverUuid, driverLat, driverLng, distance);
+    } catch (IllegalArgumentException e) {
+      return null;
+    }
   }
 }

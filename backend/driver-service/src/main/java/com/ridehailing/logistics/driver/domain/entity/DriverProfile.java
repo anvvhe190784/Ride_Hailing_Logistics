@@ -33,7 +33,7 @@ public class DriverProfile {
   @Column(name = "date_of_birth", nullable = false)
   private LocalDate dateOfBirth;
 
-  @Column(name = "address", nullable = false, length = 255)
+  @Column(name = "address", nullable = false)
   private String address;
 
   @Enumerated(EnumType.STRING)
@@ -41,7 +41,7 @@ public class DriverProfile {
   @Builder.Default
   private DriverReviewStatus reviewStatus = DriverReviewStatus.DRAFT;
 
-  @Column(name = "status_reason", length = 255)
+  @Column(name = "status_reason")
   private String statusReason;
 
   @Column(name = "reviewer_id")

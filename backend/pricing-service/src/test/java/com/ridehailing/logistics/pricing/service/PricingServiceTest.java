@@ -27,6 +27,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -509,38 +511,19 @@ class PricingServiceTest {
     verifyNoInteractions(fareQuoteRepository);
   }
 
-  @Test
-  @DisplayName("FR-PRI-007: calculateDynamicSurge should return 1.00 when demand is at or below baseline")
-  void shouldReturnBaselineSurgeWhenDemandLow() {
+  @ParameterizedTest(name = "demand={0} -> expectedSurge={1}")
+  @CsvSource({
+    "3, 1.00",
+    "15, 1.50",
+    "100, 2.50"
+  })
+  @DisplayName("FR-PRI-007 to FR-PRI-009: calculateDynamicSurge calculates correct multiplier across demand levels")
+  void shouldCalculateDynamicSurgeCorrectly(long demand, String expectedSurge) {
     when(valueOperations.increment(PricingServiceImpl.REDIS_SURGE_DEMAND_PREFIX + "HN"))
-        .thenReturn(3L);
+        .thenReturn(demand);
 
     BigDecimal surge = pricingService.calculateDynamicSurge("HN");
 
-    assertEquals(new BigDecimal("1.00"), surge);
-  }
-
-  @Test
-  @DisplayName("FR-PRI-009: calculateDynamicSurge should increase progressively under high demand")
-  void shouldReturnElevatedSurgeUnderHighDemand() {
-    // 15 requests -> excess 10 -> 1.00 + (10 * 0.05) = 1.50
-    when(valueOperations.increment(PricingServiceImpl.REDIS_SURGE_DEMAND_PREFIX + "HN"))
-        .thenReturn(15L);
-
-    BigDecimal surge = pricingService.calculateDynamicSurge("HN");
-
-    assertEquals(new BigDecimal("1.50"), surge);
-  }
-
-  @Test
-  @DisplayName("FR-PRI-007: calculateDynamicSurge should cap at MAX_SURGE (2.50) to protect consumers")
-  void shouldCapSurgeAtMaxSurgeMultiplier() {
-    // 100 requests -> exceeds 2.50 -> capped at 2.50
-    when(valueOperations.increment(PricingServiceImpl.REDIS_SURGE_DEMAND_PREFIX + "HN"))
-        .thenReturn(100L);
-
-    BigDecimal surge = pricingService.calculateDynamicSurge("HN");
-
-    assertEquals(new BigDecimal("2.50"), surge);
+    assertEquals(new BigDecimal(expectedSurge), surge);
   }
 }

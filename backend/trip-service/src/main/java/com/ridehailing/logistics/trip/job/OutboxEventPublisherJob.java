@@ -65,6 +65,19 @@ public class OutboxEventPublisherJob {
             "Successfully published outbox event ID {} (type: {}) to Kafka",
             event.getId(),
             event.getEventType());
+      } catch (InterruptedException ex) {
+        Thread.currentThread().interrupt();
+        log.error(
+            "Thread interrupted while publishing outbox event ID {}: {}",
+            event.getId(),
+            ex.getMessage());
+        event.setRetryCount(event.getRetryCount() + 1);
+        if (event.getRetryCount() >= 5) {
+          event.setStatus("FAILED");
+          log.error(
+              "Outbox event ID {} reached max retry attempts, marking as FAILED", event.getId());
+        }
+        outboxEventRepository.save(event);
       } catch (Exception ex) {
         log.error(
             "Failed to publish outbox event ID {} (attempt {}): {}",

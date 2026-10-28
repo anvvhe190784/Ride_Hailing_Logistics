@@ -1,7 +1,6 @@
 package com.ridehailing.logistics.trip.dto;
 
 import com.ridehailing.logistics.common.domain.enums.PaymentMethod;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.util.UUID;
 

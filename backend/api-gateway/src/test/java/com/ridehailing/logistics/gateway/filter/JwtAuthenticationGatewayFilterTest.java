@@ -8,8 +8,6 @@ import com.ridehailing.logistics.common.security.JwtTokenProvider;
 import com.ridehailing.logistics.common.security.SecurityConstants;
 import com.ridehailing.logistics.common.security.TokenBlacklistService;
 import io.jsonwebtoken.Claims;
-import java.net.URI;
-import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;

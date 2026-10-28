@@ -40,6 +40,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AuthServiceImpl implements AuthService {
 
+  private static final String ERR_INVALID_REFRESH_TOKEN = "INVALID_REFRESH_TOKEN";
+
   private final UserRepository userRepository;
   private final RefreshTokenRepository refreshTokenRepository;
   private final UserMapper userMapper;
@@ -111,7 +113,7 @@ public class AuthServiceImpl implements AuthService {
 
     user = userRepository.save(user);
     log.info("Registered new user ID: {} with role: {}", user.getId(), user.getRole());
-    recordAuditLog(user.getId(), "REGISTER", "User registered with role: " + user.getRole(), null);
+    recordAuditLog(user.getId(), "REGISTER", "User registered with role: " + user.getRole());
 
     String accessToken =
         jwtTokenProvider.generateAccessToken(user.getId(), user.getPhone(), user.getRole());
@@ -157,10 +159,9 @@ public class AuthServiceImpl implements AuthService {
         recordAuditLog(
             user.getId(),
             "ACCOUNT_LOCKED",
-            "Account locked for 15 minutes due to 5 consecutive failed login attempts",
-            null);
+            "Account locked for 15 minutes due to 5 consecutive failed login attempts");
       } else {
-        recordAuditLog(user.getId(), "LOGIN_FAILED", "Failed login attempt #" + attempts, null);
+        recordAuditLog(user.getId(), "LOGIN_FAILED", "Failed login attempt #" + attempts);
       }
       userRepository.save(user);
       throw BaseDomainException.badRequest(
@@ -179,7 +180,7 @@ public class AuthServiceImpl implements AuthService {
       userRepository.save(user);
     }
 
-    recordAuditLog(user.getId(), "LOGIN_SUCCESS", "User authenticated successfully", null);
+    recordAuditLog(user.getId(), "LOGIN_SUCCESS", "User authenticated successfully");
 
     String accessToken =
         jwtTokenProvider.generateAccessToken(user.getId(), user.getPhone(), user.getRole());
@@ -201,12 +202,12 @@ public class AuthServiceImpl implements AuthService {
       claims = jwtTokenProvider.parseClaims(request.refreshToken());
     } catch (Exception e) {
       throw BaseDomainException.badRequest(
-          "INVALID_REFRESH_TOKEN", "Expired or invalid refresh token");
+          ERR_INVALID_REFRESH_TOKEN, "Expired or invalid refresh token");
     }
 
     if (!jwtTokenProvider.isRefreshToken(claims)) {
       throw BaseDomainException.badRequest(
-          "INVALID_REFRESH_TOKEN", "Provided token is not a refresh token");
+          ERR_INVALID_REFRESH_TOKEN, "Provided token is not a refresh token");
     }
 
     String tokenHash = hashToken(request.refreshToken());
@@ -216,7 +217,7 @@ public class AuthServiceImpl implements AuthService {
             .orElseThrow(
                 () ->
                     BaseDomainException.forbidden(
-                        "INVALID_REFRESH_TOKEN", "Refresh token not recognized or revoked"));
+                        ERR_INVALID_REFRESH_TOKEN, "Refresh token not recognized or revoked"));
     if (Boolean.TRUE.equals(storedToken.getRevoked())) {
       throw BaseDomainException.forbidden("TOKEN_REVOKED", "Refresh token has been revoked");
     }
@@ -242,7 +243,7 @@ public class AuthServiceImpl implements AuthService {
     persistRefreshToken(user.getId(), newRefreshToken);
 
     recordAuditLog(
-        user.getId(), "TOKEN_REFRESH", "Rotated refresh token and issued new access token", null);
+        user.getId(), "TOKEN_REFRESH", "Rotated refresh token and issued new access token");
 
     return AuthResponse.of(
         newAccessToken,
@@ -254,82 +255,96 @@ public class AuthServiceImpl implements AuthService {
   @Override
   @Transactional
   public void logout(LogoutRequest request) {
-    logout(request, null);
+    doLogout(request, null);
   }
 
   @Override
   @Transactional
   public void logout(LogoutRequest request, String authHeader) {
+    doLogout(request, authHeader);
+  }
+
+  private void doLogout(LogoutRequest request, String authHeader) {
     if (request == null) {
       return;
     }
 
-    UUID userId = null;
+    String rawAccessToken = resolveAccessToken(request, authHeader);
+    UUID userId = revokeAccessToken(rawAccessToken);
+    userId = revokeRefreshToken(request.refreshToken(), userId);
 
-    // 1. Process access token revocation if provided in request or Authorization header
-    String rawAccessToken = null;
+    recordAuditLog(userId, "LOGOUT", "Tokens successfully revoked for user ID: " + userId);
+  }
+
+  private String resolveAccessToken(LogoutRequest request, String authHeader) {
     if (request.accessToken() != null && !request.accessToken().isBlank()) {
-      rawAccessToken = request.accessToken();
-    } else if (authHeader != null && authHeader.startsWith("Bearer ")) {
-      rawAccessToken = authHeader.substring(7);
+      return request.accessToken();
+    }
+    if (authHeader != null && authHeader.startsWith("Bearer ")) {
+      return authHeader.substring(7);
+    }
+    return null;
+  }
+
+  private UUID revokeAccessToken(String rawAccessToken) {
+    if (rawAccessToken == null || rawAccessToken.isBlank()) {
+      return null;
+    }
+    try {
+      Claims claims = jwtTokenProvider.parseClaims(rawAccessToken);
+      UUID userId = UUID.fromString(claims.getSubject());
+      Instant expiresAt = jwtTokenProvider.extractExpiration(claims);
+      String jti = jwtTokenProvider.extractJti(claims);
+
+      if (tokenBlacklistService != null) {
+        tokenBlacklistService.blacklistToken(rawAccessToken, expiresAt);
+        if (jti != null && !jti.isBlank()) {
+          tokenBlacklistService.blacklistToken(jti, expiresAt);
+        }
+      }
+      log.info("Blacklisted access token for user ID: {}, jti: {}", userId, jti);
+      return userId;
+    } catch (Exception e) {
+      log.debug("Access token claims parsing during logout: {}", e.getMessage());
+      return null;
+    }
+  }
+
+  private UUID revokeRefreshToken(String refreshToken, UUID currentUserId) {
+    if (refreshToken == null || refreshToken.isBlank()) {
+      return currentUserId;
+    }
+    UUID resolvedUserId = currentUserId;
+    try {
+      Claims refreshClaims = jwtTokenProvider.parseClaims(refreshToken);
+      if (resolvedUserId == null) {
+        resolvedUserId = UUID.fromString(refreshClaims.getSubject());
+      }
+    } catch (Exception e) {
+      log.debug("Refresh token claims parsing during logout: {}", e.getMessage());
     }
 
-    if (rawAccessToken != null && !rawAccessToken.isBlank()) {
-      try {
-        Claims claims = jwtTokenProvider.parseClaims(rawAccessToken);
-        userId = UUID.fromString(claims.getSubject());
-        Instant expiresAt = jwtTokenProvider.extractExpiration(claims);
-        String jti = jwtTokenProvider.extractJti(claims);
-
-        if (tokenBlacklistService != null) {
-          tokenBlacklistService.blacklistToken(rawAccessToken, expiresAt);
-          if (jti != null && !jti.isBlank()) {
-            tokenBlacklistService.blacklistToken(jti, expiresAt);
-          }
-        }
-        log.info("Blacklisted access token for user ID: {}, jti: {}", userId, jti);
-      } catch (Exception e) {
-        log.debug("Access token claims parsing during logout: {}", e.getMessage());
+    String tokenHash = hashToken(refreshToken);
+    Optional<RefreshToken> storedOpt = refreshTokenRepository.findByTokenHash(tokenHash);
+    if (storedOpt.isPresent()) {
+      RefreshToken tokenEntity = storedOpt.get();
+      tokenEntity.setRevoked(true);
+      refreshTokenRepository.save(tokenEntity);
+      if (resolvedUserId == null) {
+        resolvedUserId = tokenEntity.getUserId();
       }
+    } else if (resolvedUserId != null) {
+      RefreshToken revokedToken =
+          RefreshToken.builder()
+              .userId(resolvedUserId)
+              .tokenHash(tokenHash)
+              .expiresAt(
+                  Instant.now().plusSeconds(SecurityConstants.REFRESH_TOKEN_VALIDITY_SECONDS))
+              .revoked(true)
+              .build();
+      refreshTokenRepository.save(revokedToken);
     }
-
-    // 2. Process refresh token revocation
-    String refreshToken = request.refreshToken();
-    if (refreshToken != null && !refreshToken.isBlank()) {
-      String tokenHash = hashToken(refreshToken);
-
-      try {
-        Claims refreshClaims = jwtTokenProvider.parseClaims(refreshToken);
-        if (userId == null) {
-          userId = UUID.fromString(refreshClaims.getSubject());
-        }
-      } catch (Exception e) {
-        log.debug("Refresh token claims parsing during logout: {}", e.getMessage());
-      }
-
-      Optional<RefreshToken> storedOpt = refreshTokenRepository.findByTokenHash(tokenHash);
-      if (storedOpt.isPresent()) {
-        RefreshToken tokenEntity = storedOpt.get();
-        tokenEntity.setRevoked(true);
-        refreshTokenRepository.save(tokenEntity);
-        if (userId == null) {
-          userId = tokenEntity.getUserId();
-        }
-      } else if (userId != null) {
-        RefreshToken revokedToken =
-            RefreshToken.builder()
-                .userId(userId)
-                .tokenHash(tokenHash)
-                .expiresAt(
-                    Instant.now().plusSeconds(SecurityConstants.REFRESH_TOKEN_VALIDITY_SECONDS))
-                .revoked(true)
-                .build();
-        refreshTokenRepository.save(revokedToken);
-      }
-    }
-
-    // 3. Record audit log
-    recordAuditLog(userId, "LOGOUT", "Tokens successfully revoked for user ID: " + userId, null);
+    return resolvedUserId;
   }
 
   @Override
@@ -341,6 +356,10 @@ public class AuthServiceImpl implements AuthService {
             .orElseThrow(
                 () -> BaseDomainException.notFound("USER_NOT_FOUND", "User profile not found"));
     return userMapper.toResponse(user);
+  }
+
+  private void recordAuditLog(UUID userId, String action, String details) {
+    recordAuditLog(userId, action, details, null);
   }
 
   private void recordAuditLog(UUID userId, String action, String details, String ipAddress) {

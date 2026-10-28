@@ -1,6 +1,5 @@
 package com.ridehailing.logistics.pricing.job;
 
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 import com.ridehailing.logistics.pricing.repository.FareQuoteRepository;

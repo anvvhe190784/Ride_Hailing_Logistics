@@ -51,7 +51,7 @@ public class Payment {
   @Column(name = "idempotency_key", nullable = false, unique = true, length = 128)
   private String idempotencyKey;
 
-  @Column(name = "error_message", length = 255)
+  @Column(name = "error_message")
   private String errorMessage;
 
   @Column(name = "paid_at")

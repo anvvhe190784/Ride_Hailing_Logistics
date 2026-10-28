@@ -6,14 +6,14 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 
 /**
  * Distributed lock service backed by Redis (SET NX EX + Atomic Lua Release). Complies with
  * AGENTS.md Rule 2.4 (explicit TTL and atomic Lua owner token verification).
  */
 @Slf4j
-@Component
+@Service
 @RequiredArgsConstructor
 public class RedisDistributedLockService {
 
