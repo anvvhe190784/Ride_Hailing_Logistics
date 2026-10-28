@@ -20,6 +20,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.geo.Circle;
@@ -65,15 +66,52 @@ class LocationServiceImplTest {
     when(locationRepository.findById(driverId)).thenReturn(Optional.empty());
     when(redisTemplate.opsForGeo()).thenReturn(geoOperations);
     when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+    when(valueOperations.get(LocationServiceImpl.REDIS_DRIVER_AVAILABILITY_PREFIX + driverId))
+        .thenReturn("AVAILABLE");
 
     locationService.processTelemetry(driverId, request);
 
-    verify(locationRepository, times(1)).save(any(DriverLatestLocation.class));
+    ArgumentCaptor<DriverLatestLocation> locCaptor =
+        ArgumentCaptor.forClass(DriverLatestLocation.class);
+    verify(locationRepository, times(1)).save(locCaptor.capture());
+    assertTrue(locCaptor.getValue().isAvailable());
     verify(telemetryHistoryRepository, times(1)).save(any(DriverTelemetryHistory.class));
     verify(geoOperations, times(1))
         .add(eq("geo:drivers:available"), any(org.springframework.data.geo.Point.class), eq(driverId.toString()));
     verify(valueOperations, times(1))
         .set(eq("driver:heartbeat:" + driverId), anyString(), any());
+  }
+
+  @Test
+  void shouldProcessTelemetryWhenDriverIsOfflineOrUnavailable() {
+    UUID driverId = UUID.randomUUID();
+    TelemetryRequest request =
+        new TelemetryRequest(
+            new BigDecimal("21.0285110"),
+            new BigDecimal("105.8544441"),
+            5.0,
+            90.0,
+            12.5,
+            100L,
+            Instant.now());
+
+    when(locationRepository.findById(driverId)).thenReturn(Optional.empty());
+    when(redisTemplate.opsForGeo()).thenReturn(geoOperations);
+    when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+    when(valueOperations.get(LocationServiceImpl.REDIS_DRIVER_AVAILABILITY_PREFIX + driverId))
+        .thenReturn("OFFLINE");
+
+    locationService.processTelemetry(driverId, request);
+
+    ArgumentCaptor<DriverLatestLocation> locCaptor =
+        ArgumentCaptor.forClass(DriverLatestLocation.class);
+    verify(locationRepository, times(1)).save(locCaptor.capture());
+    assertFalse(locCaptor.getValue().isAvailable());
+
+    verify(geoOperations, times(1)).remove(eq("geo:drivers:available"), eq(driverId.toString()));
+    verify(geoOperations, never())
+        .add(anyString(), any(org.springframework.data.geo.Point.class), anyString());
+    verify(redisTemplate, times(1)).delete(eq("driver:heartbeat:" + driverId));
   }
 
   @Test

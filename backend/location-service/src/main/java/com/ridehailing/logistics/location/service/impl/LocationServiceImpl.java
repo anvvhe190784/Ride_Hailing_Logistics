@@ -35,6 +35,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class LocationServiceImpl implements LocationService {
 
   public static final String REDIS_GEO_DRIVERS_AVAILABLE = "geo:drivers:available";
+  public static final String REDIS_DRIVER_AVAILABILITY_PREFIX = "driver:availability:";
+  public static final String REDIS_DRIVER_HEARTBEAT_PREFIX = "driver:heartbeat:";
   private static final String REDIS_LOCATION_KEY_PREFIX = "driver:location:";
   private final DriverLatestLocationRepository locationRepository;
   private final StringRedisTemplate redisTemplate;
@@ -68,7 +70,9 @@ public class LocationServiceImpl implements LocationService {
     Optional<DriverLatestLocation> existingOpt = locationRepository.findById(driverId);
 
     // FR-LOC-006: Reject out-of-order or duplicate telemetry sequences
-    if (existingOpt.isPresent() && request.sequenceNum() <= existingOpt.get().getSequenceNum()) {
+    if (existingOpt.isPresent()
+        && existingOpt.get().getSequenceNum() != null
+        && request.sequenceNum() <= existingOpt.get().getSequenceNum()) {
       log.debug(
           "Ignoring out-of-order telemetry for driver {}: incoming seq {}, existing seq {}",
           driverId,
@@ -91,7 +95,22 @@ public class LocationServiceImpl implements LocationService {
     latestLocation.setSpeedMps(request.speedMps());
     latestLocation.setSequenceNum(request.sequenceNum());
     latestLocation.setDeviceTimestamp(request.deviceTimestamp());
-    boolean isAvailable = existingOpt.map(DriverLatestLocation::isAvailable).orElse(true);
+
+    String availStr = null;
+    if (redisTemplate != null) {
+      try {
+        availStr = redisTemplate.opsForValue().get(REDIS_DRIVER_AVAILABILITY_PREFIX + driverId);
+      } catch (Exception ex) {
+        log.warn(
+            "Failed to read driver availability from Redis for driver {}: {}",
+            driverId,
+            ex.getMessage());
+      }
+    }
+    boolean isAvailable =
+        availStr != null
+            ? "AVAILABLE".equalsIgnoreCase(availStr)
+            : existingOpt.map(DriverLatestLocation::isAvailable).orElse(false);
     latestLocation.setAvailable(isAvailable);
 
     locationRepository.save(latestLocation);
@@ -129,15 +148,16 @@ public class LocationServiceImpl implements LocationService {
                 new org.springframework.data.geo.Point(
                     request.longitude().doubleValue(), request.latitude().doubleValue()),
                 driverId.toString());
+        redisTemplate
+            .opsForValue()
+            .set(
+                REDIS_DRIVER_HEARTBEAT_PREFIX + driverId,
+                String.valueOf(System.currentTimeMillis()),
+                Duration.ofSeconds(60));
       } else {
         redisTemplate.opsForGeo().remove(REDIS_GEO_DRIVERS_AVAILABLE, driverId.toString());
+        redisTemplate.delete(REDIS_DRIVER_HEARTBEAT_PREFIX + driverId);
       }
-
-      // Redis driver heartbeat key (TTL 60s)
-      String heartbeatKey = "driver:heartbeat:" + driverId;
-      redisTemplate
-          .opsForValue()
-          .set(heartbeatKey, String.valueOf(System.currentTimeMillis()), Duration.ofSeconds(60));
 
       // Session 11: Write to Redis cache with TTL 60 seconds (DR-GEO-003)
       String redisKey = REDIS_LOCATION_KEY_PREFIX + driverId;
@@ -160,38 +180,40 @@ public class LocationServiceImpl implements LocationService {
     int safeLimit = Math.clamp(limit, 1, 100);
 
     // Step 1: Attempt to query Redis GEO for available drivers within radius
-    try {
-      Circle circle =
-          new Circle(
-              new org.springframework.data.geo.Point(longitude, latitude),
-              new Distance(radiusMeters, RedisGeoCommands.DistanceUnit.METERS));
-      GeoRadiusCommandArgs args =
-          GeoRadiusCommandArgs.newGeoRadiusArgs()
-              .includeDistance()
-              .includeCoordinates()
-              .sortAscending()
-              .limit(safeLimit);
+    if (redisTemplate != null) {
+      try {
+        Circle circle =
+            new Circle(
+                new org.springframework.data.geo.Point(longitude, latitude),
+                new Distance(radiusMeters, RedisGeoCommands.DistanceUnit.METERS));
+        GeoRadiusCommandArgs args =
+            GeoRadiusCommandArgs.newGeoRadiusArgs()
+                .includeDistance()
+                .includeCoordinates()
+                .sortAscending()
+                .limit(safeLimit);
 
-      GeoResults<RedisGeoCommands.GeoLocation<String>> geoResults =
-          redisTemplate.opsForGeo().radius(REDIS_GEO_DRIVERS_AVAILABLE, circle, args);
+        GeoResults<RedisGeoCommands.GeoLocation<String>> geoResults =
+            redisTemplate.opsForGeo().radius(REDIS_GEO_DRIVERS_AVAILABLE, circle, args);
 
-      if (geoResults != null && !geoResults.getContent().isEmpty()) {
-        List<NearbyDriverResponse> nearbyDrivers = new ArrayList<>();
-        for (GeoResult<RedisGeoCommands.GeoLocation<String>> result : geoResults) {
-          NearbyDriverResponse driver = mapGeoResultToNearbyDriver(result, latitude, longitude);
-          if (driver != null) {
-            nearbyDrivers.add(driver);
+        if (geoResults != null && !geoResults.getContent().isEmpty()) {
+          List<NearbyDriverResponse> nearbyDrivers = new ArrayList<>();
+          for (GeoResult<RedisGeoCommands.GeoLocation<String>> result : geoResults) {
+            NearbyDriverResponse driver = mapGeoResultToNearbyDriver(result, latitude, longitude);
+            if (driver != null) {
+              nearbyDrivers.add(driver);
+            }
+          }
+          if (!nearbyDrivers.isEmpty()) {
+            log.debug("Found {} available drivers via Redis GEO cache", nearbyDrivers.size());
+            return nearbyDrivers;
           }
         }
-        if (!nearbyDrivers.isEmpty()) {
-          log.debug("Found {} available drivers via Redis GEO cache", nearbyDrivers.size());
-          return nearbyDrivers;
-        }
+      } catch (Exception ex) {
+        log.warn(
+            "Failed to query nearby drivers from Redis GEO, falling back to database: {}",
+            ex.getMessage());
       }
-    } catch (Exception ex) {
-      log.warn(
-          "Failed to query nearby drivers from Redis GEO, falling back to database: {}",
-          ex.getMessage());
     }
 
     // Step 2: Fallback to database query if Redis returns empty, null, or threw exception
@@ -212,7 +234,7 @@ public class LocationServiceImpl implements LocationService {
       return null;
     }
     String driverIdStr = result.getContent().getName();
-    String heartbeatKey = "driver:heartbeat:" + driverIdStr;
+    String heartbeatKey = REDIS_DRIVER_HEARTBEAT_PREFIX + driverIdStr;
     if (!Boolean.TRUE.equals(redisTemplate.hasKey(heartbeatKey))) {
       return null;
     }

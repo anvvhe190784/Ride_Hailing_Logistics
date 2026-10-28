@@ -150,6 +150,75 @@ class TripServiceImplTest {
   }
 
   @Test
+  @DisplayName("createTrip skips unavailable drivers from Redis when dispatching offers")
+  void shouldSkipUnavailableDriversWhenDispatchingOffers() {
+    CreateTripRequest request =
+        new CreateTripRequest(quoteId, idempotencyKey, PaymentMethod.CASH);
+
+    FareQuoteResponse quoteResponse =
+        new FareQuoteResponse(
+            quoteId,
+            customerId,
+            ServiceType.RIDE,
+            "123 Hoan Kiem, Ha Noi",
+            "456 Cau Giay, Ha Noi",
+            5000,
+            600,
+            new BigDecimal("15000"),
+            new BigDecimal("35000"),
+            BigDecimal.ZERO,
+            BigDecimal.ONE,
+            new BigDecimal("50000"),
+            "VND",
+            1,
+            Instant.now().plusSeconds(600),
+            21.0300,
+            105.8500,
+            21.0400,
+            105.7800);
+
+    when(tripRepository.findByIdempotencyKey(idempotencyKey)).thenReturn(Optional.empty());
+    when(tripRepository.existsByQuoteId(quoteId)).thenReturn(false);
+    when(pricingClient.consumeQuote(quoteId, customerId))
+        .thenReturn(ApiResponse.success(quoteResponse, "corr-1"));
+
+    when(tripRepository.save(any(Trip.class)))
+        .thenAnswer(
+            invocation -> {
+              Trip t = invocation.getArgument(0);
+              t.setId(UUID.randomUUID());
+              return t;
+            });
+
+    UUID availableDriverId = UUID.randomUUID();
+    UUID offlineDriverId = UUID.randomUUID();
+    List<NearbyDriverResponse> nearbyDrivers =
+        List.of(
+            new NearbyDriverResponse(availableDriverId, 21.0310, 105.8510, 150.0),
+            new NearbyDriverResponse(offlineDriverId, 21.0320, 105.8520, 300.0));
+
+    when(locationClient.getNearbyDrivers(21.0300, 105.8500, 3000.0, 5))
+        .thenReturn(ApiResponse.success(nearbyDrivers, "corr-2"));
+
+    when(valueOperations.get(TripServiceImpl.REDIS_DRIVER_AVAILABILITY_PREFIX + availableDriverId))
+        .thenReturn("AVAILABLE");
+    when(valueOperations.get(TripServiceImpl.REDIS_DRIVER_AVAILABILITY_PREFIX + offlineDriverId))
+        .thenReturn("OFFLINE");
+
+    TripDetailResponse result = tripService.createTrip(customerId, request);
+
+    assertNotNull(result);
+    assertEquals(TripStatus.MATCHING, result.status());
+
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<List<DriverOffer>> offersCaptor = ArgumentCaptor.forClass(List.class);
+    verify(driverOfferRepository, times(1)).saveAll(offersCaptor.capture());
+    List<DriverOffer> savedOffers = offersCaptor.getValue();
+    assertEquals(1, savedOffers.size());
+    assertEquals(availableDriverId, savedOffers.get(0).getDriverId());
+  }
+
+  @Test
   @DisplayName("respondOffer should catch DataIntegrityViolationException and throw BaseDomainException conflict TRIP_ALREADY_CLAIMED")
   void shouldThrowConflictWhenClaimEncountersDataIntegrityViolation() {
     UUID offerId = UUID.randomUUID();

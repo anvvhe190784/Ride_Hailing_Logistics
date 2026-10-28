@@ -31,6 +31,10 @@ import org.springframework.transaction.annotation.Transactional;
 public class DriverProfileServiceImpl implements DriverProfileService {
 
   public static final String REDIS_PROFILE_CACHE_PREFIX = "cache:driver:profile:";
+  public static final String REDIS_DRIVER_AVAILABILITY_PREFIX = "driver:availability:";
+  public static final String REDIS_GEO_DRIVERS_AVAILABLE = "geo:drivers:available";
+  public static final String REDIS_DRIVER_HEARTBEAT_PREFIX = "driver:heartbeat:";
+  public static final String REDIS_DRIVER_LOCATION_PREFIX = "driver:location:";
   private static final String ERR_DRIVER_NOT_FOUND = "DRIVER_NOT_FOUND";
   private static final String MSG_DRIVER_NOT_FOUND = "Driver profile not found";
 
@@ -83,6 +87,10 @@ public class DriverProfileServiceImpl implements DriverProfileService {
   @Override
   @Transactional
   public DriverProfileResponse updateAvailability(UUID driverId, DriverAvailabilityStatus status) {
+    if (status == null) {
+      throw BaseDomainException.badRequest("INVALID_STATUS", "Availability status is required");
+    }
+
     DriverProfile profile =
         driverProfileRepository
             .findById(driverId)
@@ -107,6 +115,18 @@ public class DriverProfileServiceImpl implements DriverProfileService {
     profile.setAvailabilityStatus(status);
     profile = driverProfileRepository.save(profile);
     evictDriverProfileCache(driverId);
+    if (redisTemplate != null) {
+      try {
+        redisTemplate.opsForValue().set(REDIS_DRIVER_AVAILABILITY_PREFIX + driverId, status.name());
+        if (status != DriverAvailabilityStatus.AVAILABLE) {
+          redisTemplate.opsForGeo().remove(REDIS_GEO_DRIVERS_AVAILABLE, driverId.toString());
+          redisTemplate.delete(REDIS_DRIVER_HEARTBEAT_PREFIX + driverId);
+          redisTemplate.delete(REDIS_DRIVER_LOCATION_PREFIX + driverId);
+        }
+      } catch (Exception e) {
+        log.warn("Failed to sync driver availability to Redis for driverId {}: {}", driverId, e.getMessage());
+      }
+    }
     log.info("Driver ID {} updated availability to {}", driverId, status);
     return driverMapper.toResponse(profile);
   }

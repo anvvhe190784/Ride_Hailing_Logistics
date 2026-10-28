@@ -57,6 +57,7 @@ public class TripServiceImpl implements TripService {
   public static final String REDIS_TRIP_IDEMPOTENCY_PREFIX = "idempotency:trip:create:";
   public static final String REDIS_TRIP_IDEMPOTENCY_LOCK_PREFIX = "lock:trip:idempotency:";
   public static final String REDIS_TRIP_CLAIM_LOCK_PREFIX = "lock:trip:claim:";
+  public static final String REDIS_DRIVER_AVAILABILITY_PREFIX = "driver:availability:";
 
   private static final String STATUS_PENDING = "PENDING";
   private static final String STATUS_REJECTED = "REJECTED";
@@ -127,7 +128,10 @@ public class TripServiceImpl implements TripService {
 
     try {
       // FR-TRIP-002: Idempotency Key check
-      Optional<Trip> existingTrip = tripRepository.findByIdempotencyKey(request.idempotencyKey());
+      Optional<Trip> existingTrip =
+          hasIdempKey
+              ? tripRepository.findByIdempotencyKey(request.idempotencyKey())
+              : Optional.empty();
       if (existingTrip.isPresent()) {
         log.info(
             "Idempotent request detected for key {}. Returning existing trip.",
@@ -197,6 +201,13 @@ public class TripServiceImpl implements TripService {
         if (driversRes != null && driversRes.getData() != null) {
           List<DriverOffer> offers = new ArrayList<>();
           for (NearbyDriverResponse driver : driversRes.getData()) {
+            if (redisTemplate != null) {
+              String avail = redisTemplate.opsForValue().get(REDIS_DRIVER_AVAILABILITY_PREFIX + driver.driverId());
+              if (avail != null && !"AVAILABLE".equalsIgnoreCase(avail)) {
+                log.info("Skipping driver {} for trip offers as availability status is {}", driver.driverId(), avail);
+                continue;
+              }
+            }
             DriverOffer offer =
                 DriverOffer.builder()
                     .tripId(trip.getId())

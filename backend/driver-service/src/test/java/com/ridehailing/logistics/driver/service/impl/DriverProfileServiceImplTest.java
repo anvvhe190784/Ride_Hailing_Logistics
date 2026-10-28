@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.GeoOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
@@ -41,6 +42,7 @@ public class DriverProfileServiceImplTest {
   @Mock private DriverMapper driverMapper;
   @Mock private StringRedisTemplate redisTemplate;
   @Mock private ValueOperations<String, String> valueOperations;
+  @Mock private GeoOperations<String, String> geoOperations;
 
   private ObjectMapper objectMapper;
   private DriverProfileServiceImpl service;
@@ -49,6 +51,7 @@ public class DriverProfileServiceImplTest {
   void setUp() {
     objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
     lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+    lenient().when(redisTemplate.opsForGeo()).thenReturn(geoOperations);
     service =
         new DriverProfileServiceImpl(
             driverProfileRepository,
@@ -97,6 +100,44 @@ public class DriverProfileServiceImplTest {
     assertEquals(DriverAvailabilityStatus.AVAILABLE, response.availabilityStatus());
     assertEquals(DriverAvailabilityStatus.AVAILABLE, profile.getAvailabilityStatus());
     verify(redisTemplate).delete(DriverProfileServiceImpl.REDIS_PROFILE_CACHE_PREFIX + driverId);
+    verify(valueOperations).set(DriverProfileServiceImpl.REDIS_DRIVER_AVAILABILITY_PREFIX + driverId, DriverAvailabilityStatus.AVAILABLE.name());
+    verify(geoOperations, never()).remove(anyString(), anyString());
+    verify(redisTemplate, never()).delete(DriverProfileServiceImpl.REDIS_DRIVER_HEARTBEAT_PREFIX + driverId);
+    verify(redisTemplate, never()).delete(DriverProfileServiceImpl.REDIS_DRIVER_LOCATION_PREFIX + driverId);
+  }
+
+  @Test
+  void shouldCleanUpGeoAndHeartbeatWhenDriverSwitchesToOffline() {
+    UUID driverId = UUID.randomUUID();
+    DriverProfile profile =
+        DriverProfile.builder()
+            .driverId(driverId)
+            .reviewStatus(DriverReviewStatus.APPROVED)
+            .availabilityStatus(DriverAvailabilityStatus.AVAILABLE)
+            .build();
+
+    when(driverProfileRepository.findById(driverId)).thenReturn(Optional.of(profile));
+    when(driverProfileRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    when(driverMapper.toResponse(any(DriverProfile.class)))
+        .thenReturn(
+            new DriverProfileResponse(
+                driverId,
+                "001234567890",
+                "123 Hanoi Street",
+                DriverReviewStatus.APPROVED,
+                null,
+                DriverAvailabilityStatus.OFFLINE));
+
+    DriverProfileResponse response =
+        service.updateAvailability(driverId, DriverAvailabilityStatus.OFFLINE);
+
+    assertNotNull(response);
+    assertEquals(DriverAvailabilityStatus.OFFLINE, response.availabilityStatus());
+    verify(redisTemplate).delete(DriverProfileServiceImpl.REDIS_PROFILE_CACHE_PREFIX + driverId);
+    verify(valueOperations).set(DriverProfileServiceImpl.REDIS_DRIVER_AVAILABILITY_PREFIX + driverId, DriverAvailabilityStatus.OFFLINE.name());
+    verify(geoOperations).remove(DriverProfileServiceImpl.REDIS_GEO_DRIVERS_AVAILABLE, driverId.toString());
+    verify(redisTemplate).delete(DriverProfileServiceImpl.REDIS_DRIVER_HEARTBEAT_PREFIX + driverId);
+    verify(redisTemplate).delete(DriverProfileServiceImpl.REDIS_DRIVER_LOCATION_PREFIX + driverId);
   }
 
   @Test
