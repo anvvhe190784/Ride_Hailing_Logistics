@@ -144,6 +144,36 @@ class LocationServiceImplTest {
   }
 
   @Test
+  void shouldAcceptTelemetryWhenDriverWasInactiveEvenIfSequenceIsLower() {
+    UUID driverId = UUID.randomUUID();
+    DriverLatestLocation existing =
+        DriverLatestLocation.builder()
+            .driverId(driverId)
+            .isAvailable(false)
+            .sequenceNum(200L)
+            .build();
+
+    TelemetryRequest request =
+        new TelemetryRequest(
+            new BigDecimal("21.0285110"),
+            new BigDecimal("105.8544441"),
+            5.0,
+            90.0,
+            12.5,
+            150L,
+            Instant.now());
+
+    when(locationRepository.findById(driverId)).thenReturn(Optional.of(existing));
+    when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+    when(valueOperations.get("driver:availability:" + driverId)).thenReturn("AVAILABLE");
+    when(redisTemplate.opsForGeo()).thenReturn(geoOperations);
+
+    locationService.processTelemetry(driverId, request);
+
+    verify(locationRepository, times(1)).save(any());
+  }
+
+  @Test
   void shouldReturnNearbyDriversFromRedisWhenHeartbeatIsValid() {
     UUID driverId = UUID.randomUUID();
     double lat = 21.028511;

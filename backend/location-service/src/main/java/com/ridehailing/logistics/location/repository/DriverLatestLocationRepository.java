@@ -21,8 +21,7 @@ public interface DriverLatestLocationRepository extends JpaRepository<DriverLate
                CAST(d.longitude AS float8) AS longitude,
                CAST(ST_Distance(d.location::geography, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography) AS float8) AS distanceMeters
         FROM location.driver_latest_locations d
-        WHERE d.is_available = TRUE
-          AND d.updated_at >= :cutoffTime
+        WHERE (d.is_available = TRUE OR d.updated_at >= :cutoffTime)
           AND ST_DWithin(d.location::geography, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography, :radiusMeters)
         ORDER BY distanceMeters ASC
         LIMIT :limit

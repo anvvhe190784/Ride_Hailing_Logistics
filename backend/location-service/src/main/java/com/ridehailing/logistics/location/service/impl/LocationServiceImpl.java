@@ -70,7 +70,10 @@ public class LocationServiceImpl implements LocationService {
     Optional<DriverLatestLocation> existingOpt = locationRepository.findById(driverId);
 
     // FR-LOC-006: Reject out-of-order or duplicate telemetry sequences
+    // Only reject if driver is already available in DB and incoming sequence is <= existing sequence.
+    // If driver is currently inactive/offline, treat incoming telemetry as a fresh active session.
     if (existingOpt.isPresent()
+        && existingOpt.get().isAvailable()
         && existingOpt.get().getSequenceNum() != null
         && request.sequenceNum() <= existingOpt.get().getSequenceNum()) {
       log.debug(
@@ -236,17 +239,41 @@ public class LocationServiceImpl implements LocationService {
             redisTemplate.opsForValue().get(REDIS_DRIVER_AVAILABILITY_PREFIX + driverId);
         if (avail != null) {
           boolean available = "AVAILABLE".equalsIgnoreCase(avail);
-          if (!available) {
-            locationRepository
-                .findById(driverId)
-                .ifPresent(
-                    loc -> {
-                      if (loc.isAvailable()) {
-                        loc.setAvailable(false);
-                        locationRepository.save(loc);
+          locationRepository
+              .findById(driverId)
+              .ifPresent(
+                  loc -> {
+                    if (loc.isAvailable() != available) {
+                      loc.setAvailable(available);
+                      if (available) {
+                        loc.setServerTimestamp(Instant.now());
+                        if (loc.getLocation() != null) {
+                          try {
+                            redisTemplate
+                                .opsForGeo()
+                                .add(
+                                    REDIS_GEO_DRIVERS_AVAILABLE,
+                                    new org.springframework.data.geo.Point(
+                                        loc.getLongitude().doubleValue(),
+                                        loc.getLatitude().doubleValue()),
+                                    driverId.toString());
+                            redisTemplate
+                                .opsForValue()
+                                .set(
+                                    REDIS_DRIVER_HEARTBEAT_PREFIX + driverId,
+                                    String.valueOf(System.currentTimeMillis()),
+                                    Duration.ofSeconds(60));
+                          } catch (Exception ex) {
+                            log.warn(
+                                "Failed to warm Redis GEO for available driver {}: {}",
+                                driverId,
+                                ex.getMessage());
+                          }
+                        }
                       }
-                    });
-          }
+                      locationRepository.save(loc);
+                    }
+                  });
           return available;
         }
       } catch (Exception ex) {
