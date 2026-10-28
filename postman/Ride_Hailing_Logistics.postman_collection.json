@@ -15,18 +15,40 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"phone\": \"0988776655\",\n  \"email\": \"newbie.customer@example.com\",\n  \"password\": \"password123\",\n  \"fullName\": \"Trần Thị Khách Mới\"\n}"
+              "raw": "{\n  \"phone\": \"{{new_customer_phone}}\",\n  \"email\": \"newbie.customer@example.com\",\n  \"password\": \"password123\",\n  \"fullName\": \"Trần Thị Khách Mới\",\n  \"role\": \"CUSTOMER\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/v1/auth/register",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "auth", "register"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "register"
+              ]
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "var randomPhone = \"098\" + Math.floor(1000000 + Math.random() * 9000000);",
+                  "pm.environment.set(\"new_customer_phone\", randomPhone);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         },
         {
           "name": "1.2 Login as Customer",
@@ -52,7 +74,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -60,8 +85,15 @@
             },
             "url": {
               "raw": "{{base_url}}/api/v1/auth/login",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "auth", "login"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
             }
           }
         },
@@ -88,7 +120,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -96,8 +131,15 @@
             },
             "url": {
               "raw": "{{base_url}}/api/v1/auth/login",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "auth", "login"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
             }
           }
         },
@@ -121,7 +163,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -129,8 +174,15 @@
             },
             "url": {
               "raw": "{{base_url}}/api/v1/auth/login",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "auth", "login"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
             }
           }
         },
@@ -154,7 +206,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -162,8 +217,15 @@
             },
             "url": {
               "raw": "{{base_url}}/api/v1/auth/login",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "auth", "login"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
             }
           }
         },
@@ -187,7 +249,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -195,8 +260,15 @@
             },
             "url": {
               "raw": "{{base_url}}/api/v1/auth/refresh-token",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "auth", "refresh-token"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "refresh-token"
+              ]
             }
           }
         },
@@ -205,8 +277,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{customer_token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customer_token}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -214,8 +292,59 @@
             },
             "url": {
               "raw": "{{base_url}}/api/v1/auth/logout",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "auth", "logout"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "logout"
+              ]
+            }
+          }
+        },
+        {
+          "name": "1.8 Re-login Customer (Fresh Token for Tests)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.data && jsonData.data.accessToken) {",
+                  "    pm.environment.set(\"customer_token\", jsonData.data.accessToken);",
+                  "    pm.environment.set(\"refresh_token\", jsonData.data.refreshToken);",
+                  "    console.log(\"Refreshed active customer_token for downstream tests\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{customer_phone}}\",\n  \"password\": \"{{customer_password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
             }
           }
         }
@@ -230,12 +359,22 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{driver_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{driver_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/v1/drivers/me",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "drivers", "me"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "drivers",
+                "me"
+              ]
             }
           }
         },
@@ -244,12 +383,23 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/v1/drivers/{{new_driver_id}}/approve",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "drivers", "{{new_driver_id}}", "approve"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "drivers",
+                "{{new_driver_id}}",
+                "approve"
+              ]
             }
           }
         },
@@ -258,14 +408,27 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{driver_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{driver_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/v1/drivers/availability?status=AVAILABLE",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "drivers", "availability"],
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "drivers",
+                "availability"
+              ],
               "query": [
-                { "key": "status", "value": "AVAILABLE" }
+                {
+                  "key": "status",
+                  "value": "AVAILABLE"
+                }
               ]
             }
           }
@@ -275,14 +438,70 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{driver_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{driver_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/v1/drivers/availability?status=OFFLINE",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "drivers", "availability"],
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "drivers",
+                "availability"
+              ],
               "query": [
-                { "key": "status", "value": "OFFLINE" }
+                {
+                  "key": "status",
+                  "value": "OFFLINE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "2.5 Re-enable Driver Availability (AVAILABLE for Dispatch)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{driver_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/drivers/availability?status=AVAILABLE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "drivers",
+                "availability"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "AVAILABLE"
+                }
               ]
             }
           }
@@ -298,8 +517,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{driver_token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{driver_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -307,8 +532,15 @@
             },
             "url": {
               "raw": "{{base_url}}/api/v1/locations/telemetry",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "locations", "telemetry"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "locations",
+                "telemetry"
+              ]
             }
           }
         },
@@ -317,17 +549,39 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{customer_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customer_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/v1/locations/nearby-drivers?latitude=21.028511&longitude=105.854444&radiusMeters=3000&limit=5",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "locations", "nearby-drivers"],
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "locations",
+                "nearby-drivers"
+              ],
               "query": [
-                { "key": "latitude", "value": "21.028511" },
-                { "key": "longitude", "value": "105.854444" },
-                { "key": "radiusMeters", "value": "3000" },
-                { "key": "limit", "value": "5" }
+                {
+                  "key": "latitude",
+                  "value": "21.028511"
+                },
+                {
+                  "key": "longitude",
+                  "value": "105.854444"
+                },
+                {
+                  "key": "radiusMeters",
+                  "value": "3000"
+                },
+                {
+                  "key": "limit",
+                  "value": "5"
+                }
               ]
             }
           }
@@ -358,9 +612,18 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{customer_token}}" },
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Idempotency-Key", "value": "{{$guid}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customer_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -368,8 +631,15 @@
             },
             "url": {
               "raw": "{{base_url}}/api/v1/pricing/quotes",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "pricing", "quotes"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pricing",
+                "quotes"
+              ]
             }
           }
         },
@@ -378,12 +648,23 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{customer_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customer_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/v1/pricing/quotes/{{quote_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "pricing", "quotes", "{{quote_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pricing",
+                "quotes",
+                "{{quote_id}}"
+              ]
             }
           }
         }
@@ -409,23 +690,48 @@
                 ],
                 "type": "text/javascript"
               }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "var uuid = pm.variables.replaceIn(\"{{$guid}}\");",
+                  "pm.environment.set(\"idempotency_key\", uuid);"
+                ],
+                "type": "text/javascript"
+              }
             }
           ],
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{customer_token}}" },
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Idempotency-Key", "value": "{{$guid}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customer_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotency_key}}"
+              }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"quoteId\": \"{{quote_id}}\",\n  \"idempotencyKey\": \"{{$guid}}\",\n  \"paymentMethod\": \"CASH\"\n}"
+              "raw": "{\n  \"quoteId\": \"{{quote_id}}\",\n  \"idempotencyKey\": \"{{idempotency_key}}\",\n  \"paymentMethod\": \"CASH\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/v1/trips",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "trips"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "trips"
+              ]
             }
           }
         },
@@ -449,12 +755,23 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{driver_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{driver_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/v1/trips/offers/pending",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "trips", "offers", "pending"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "trips",
+                "offers",
+                "pending"
+              ]
             }
           }
         },
@@ -463,8 +780,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{driver_token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{driver_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -472,8 +795,17 @@
             },
             "url": {
               "raw": "{{base_url}}/api/v1/trips/offers/{{offer_id}}/respond",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "trips", "offers", "{{offer_id}}", "respond"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "trips",
+                "offers",
+                "{{offer_id}}",
+                "respond"
+              ]
             }
           }
         },
@@ -482,14 +814,28 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{driver_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{driver_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/v1/trips/{{trip_id}}/status?nextStatus=PICKING_UP",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "trips", "{{trip_id}}", "status"],
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "trips",
+                "{{trip_id}}",
+                "status"
+              ],
               "query": [
-                { "key": "nextStatus", "value": "PICKING_UP" }
+                {
+                  "key": "nextStatus",
+                  "value": "PICKING_UP"
+                }
               ]
             }
           }
@@ -499,14 +845,28 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{driver_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{driver_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/v1/trips/{{trip_id}}/status?nextStatus=ARRIVED",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "trips", "{{trip_id}}", "status"],
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "trips",
+                "{{trip_id}}",
+                "status"
+              ],
               "query": [
-                { "key": "nextStatus", "value": "ARRIVED" }
+                {
+                  "key": "nextStatus",
+                  "value": "ARRIVED"
+                }
               ]
             }
           }
@@ -516,14 +876,28 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{driver_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{driver_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/v1/trips/{{trip_id}}/status?nextStatus=IN_TRIP",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "trips", "{{trip_id}}", "status"],
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "trips",
+                "{{trip_id}}",
+                "status"
+              ],
               "query": [
-                { "key": "nextStatus", "value": "IN_TRIP" }
+                {
+                  "key": "nextStatus",
+                  "value": "IN_TRIP"
+                }
               ]
             }
           }
@@ -533,14 +907,28 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{driver_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{driver_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/v1/trips/{{trip_id}}/status?nextStatus=COMPLETED",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "trips", "{{trip_id}}", "status"],
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "trips",
+                "{{trip_id}}",
+                "status"
+              ],
               "query": [
-                { "key": "nextStatus", "value": "COMPLETED" }
+                {
+                  "key": "nextStatus",
+                  "value": "COMPLETED"
+                }
               ]
             }
           }
@@ -550,28 +938,213 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{customer_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customer_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/v1/trips/{{trip_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "trips", "{{trip_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "trips",
+                "{{trip_id}}"
+              ]
             }
           }
         },
         {
-          "name": "5.8 Customer Cancel Trip",
+          "name": "5.8 Customer Create Trip (for Cancellation Flow)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "var uuid = pm.variables.replaceIn(\"{{$guid}}\");",
+                  "pm.environment.set(\"idempotency_key\", uuid);",
+                  "",
+                  "// Request fresh quote to avoid QUOTE_ALREADY_USED",
+                  "pm.sendRequest({",
+                  "    url: pm.environment.get(\"base_url\") + \"/api/v1/pricing/quotes\",",
+                  "    method: \"POST\",",
+                  "    header: {",
+                  "        \"Content-Type\": \"application/json\",",
+                  "        \"Authorization\": \"Bearer \" + pm.environment.get(\"customer_token\")",
+                  "    },",
+                  "    body: {",
+                  "        mode: \"raw\",",
+                  "        raw: JSON.stringify({",
+                  "            serviceType: \"RIDE\",",
+                  "            regionCode: \"VN-HN\",",
+                  "            pickupAddress: \"Nhà hát Lớn Hà Nội, Hoàn Kiếm\",",
+                  "            pickupLat: 21.028511,",
+                  "            pickupLng: 105.854444,",
+                  "            dropoffAddress: \"Đại học Bách Khoa Hà Nội, Hai Bà Trưng\",",
+                  "            dropoffLat: 21.004444,",
+                  "            dropoffLng: 105.843333",
+                  "        })",
+                  "    }",
+                  "}, function (err, res) {",
+                  "    if (!err && res.code === 201) {",
+                  "        var q = res.json();",
+                  "        var qId = (q.data && (q.data.quoteId || q.data.id));",
+                  "        if (qId) {",
+                  "            pm.environment.set(\"quote_id_cancel\", qId);",
+                  "            console.log(\"Generated fresh quote for cancellation: \" + qId);",
+                  "        }",
+                  "    } else {",
+                  "        console.error(\"Failed to generate fresh quote for cancellation: \", err || (res && res.text()));",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201 Created\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.data) {",
+                  "    var tripId = jsonData.data.tripId || jsonData.data.id;",
+                  "    pm.environment.set(\"cancelled_trip_id\", tripId);",
+                  "    console.log(\"Saved cancelled_trip_id: \" + tripId);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customer_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotency_key}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quoteId\": \"{{quote_id_cancel}}\",\n  \"idempotencyKey\": \"{{idempotency_key}}\",\n  \"paymentMethod\": \"CASH\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/trips",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "trips"
+              ]
+            }
+          }
+        },
+        {
+          "name": "5.9 Customer Preview Cancellation Fee",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Cancellation fee preview returned\", function () {",
+                  "    pm.expect(jsonData.data).to.have.property(\"cancellationFee\");",
+                  "    pm.expect(jsonData.data).to.have.property(\"gracePeriodActive\");",
+                  "    pm.expect(jsonData.data).to.have.property(\"policyDescription\");",
+                  "    pm.environment.set(\"cancellation_fee\", jsonData.data.cancellationFee);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customer_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/trips/{{cancelled_trip_id}}/cancellation-fee",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "trips",
+                "{{cancelled_trip_id}}",
+                "cancellation-fee"
+              ]
+            }
+          }
+        },
+        {
+          "name": "5.10 Customer Cancel Trip",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Trip is cancelled\", function () {",
+                  "    pm.expect(jsonData.data.status).to.eql(\"CANCELLED\");",
+                  "    pm.expect(jsonData.data).to.have.property(\"cancellationFee\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{customer_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customer_token}}"
+              }
             ],
             "url": {
-              "raw": "{{base_url}}/api/v1/trips/{{trip_id}}/status?nextStatus=CANCELLED",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "trips", "{{trip_id}}", "status"],
+              "raw": "{{base_url}}/api/v1/trips/{{cancelled_trip_id}}/status?nextStatus=CANCELLED",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "trips",
+                "{{cancelled_trip_id}}",
+                "status"
+              ],
               "query": [
-                { "key": "nextStatus", "value": "CANCELLED" }
+                {
+                  "key": "nextStatus",
+                  "value": "CANCELLED"
+                }
               ]
             }
           }
@@ -587,12 +1160,23 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{driver_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{driver_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/v1/payments/wallets/me",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "payments", "wallets", "me"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "payments",
+                "wallets",
+                "me"
+              ]
             }
           }
         },
@@ -601,18 +1185,53 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{driver_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{driver_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/v1/payments/wallets/statement?page=0&size=20",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "payments", "wallets", "statement"],
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "payments",
+                "wallets",
+                "statement"
+              ],
               "query": [
-                { "key": "page", "value": "0" },
-                { "key": "size", "value": "20" }
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
               ]
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Statement page returned\", function () {",
+                  "    pm.expect(jsonData.data).to.have.property(\"content\");",
+                  "    pm.expect(Array.isArray(jsonData.data.content)).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         }
       ]
     },
@@ -625,39 +1244,104 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{customer_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customer_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/v1/payments/wallets/me",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "payments", "wallets", "me"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "payments",
+                "wallets",
+                "me"
+              ]
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 403 Forbidden\", function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Error code is FORBIDDEN_ACCESS\", function () {",
+                  "    pm.expect(jsonData.code).to.eql(\"FORBIDDEN_ACCESS\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         },
         {
-          "name": "7.2 Demo 409 Conflict: Invalid State Machine Jump (MATCHING to COMPLETED)",
+          "name": "7.2 Demo 409 Conflict: Invalid State Machine Jump (COMPLETED to COMPLETED)",
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{driver_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{driver_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/v1/trips/{{trip_id}}/status?nextStatus=COMPLETED",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "trips", "{{trip_id}}", "status"],
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "trips",
+                "{{trip_id}}",
+                "status"
+              ],
               "query": [
-                { "key": "nextStatus", "value": "COMPLETED" }
+                {
+                  "key": "nextStatus",
+                  "value": "COMPLETED"
+                }
               ]
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 409 Conflict\", function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Error code is INVALID_TRIP_STATE\", function () {",
+                  "    pm.expect(jsonData.code).to.eql(\"INVALID_TRIP_STATE\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         },
         {
           "name": "7.3 Demo 400 Bad Request: GPS Teleportation (> 250km/h)",
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{driver_token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{driver_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -665,8 +1349,73 @@
             },
             "url": {
               "raw": "{{base_url}}/api/v1/locations/telemetry",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "locations", "telemetry"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "locations",
+                "telemetry"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 400 Bad Request\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Error code indicates teleportation or validation error\", function () {",
+                  "    pm.expect(jsonData.code).to.be.oneOf([\"VALIDATION_ERROR\", \"BAD_REQUEST\", \"GPS_TELEPORTATION_DETECTED\"]);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "7.4 Demo 403 Forbidden: BOLA Violation (Stranger views Trip Details)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 403 Forbidden\", function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"BOLA violation error code returned\", function () {",
+                  "    pm.expect(jsonData.code).to.eql(\"FORBIDDEN_ACCESS\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{support_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/trips/{{trip_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "trips",
+                "{{trip_id}}"
+              ]
             }
           }
         }
