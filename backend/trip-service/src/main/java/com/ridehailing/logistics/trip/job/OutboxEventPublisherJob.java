@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ridehailing.logistics.common.event.EventEnvelope;
+import com.ridehailing.logistics.common.event.TripCancelledEvent;
 import com.ridehailing.logistics.common.event.TripCompletedEvent;
 import com.ridehailing.logistics.trip.domain.entity.OutboxEvent;
 import com.ridehailing.logistics.trip.event.TripEventProducer;
@@ -42,16 +43,25 @@ public class OutboxEventPublisherJob {
     for (OutboxEvent event : pendingEvents) {
       try {
         boolean isTripCompleted = "TripCompleted".equals(event.getEventType());
+        boolean isTripCancelled = "TripCancelled".equals(event.getEventType());
         String topic =
             isTripCompleted
                 ? TripEventProducer.TOPIC_TRIP_COMPLETED
-                : "trip." + event.getEventType().toLowerCase();
+                : isTripCancelled
+                    ? TripEventProducer.TOPIC_TRIP_CANCELLED
+                    : "trip." + event.getEventType().toLowerCase();
 
         if (isTripCompleted) {
           EventEnvelope<TripCompletedEvent> envelope =
               objectMapper.readValue(
                   event.getPayload(),
                   new TypeReference<EventEnvelope<TripCompletedEvent>>() {});
+          kafkaTemplate.send(topic, event.getAggregateId(), envelope).get(5, TimeUnit.SECONDS);
+        } else if (isTripCancelled) {
+          EventEnvelope<TripCancelledEvent> envelope =
+              objectMapper.readValue(
+                  event.getPayload(),
+                  new TypeReference<EventEnvelope<TripCancelledEvent>>() {});
           kafkaTemplate.send(topic, event.getAggregateId(), envelope).get(5, TimeUnit.SECONDS);
         } else {
           JsonNode payloadNode = objectMapper.readTree(event.getPayload());

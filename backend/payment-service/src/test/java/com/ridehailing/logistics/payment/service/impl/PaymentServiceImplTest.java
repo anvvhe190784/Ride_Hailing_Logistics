@@ -3,7 +3,10 @@ package com.ridehailing.logistics.payment.service.impl;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.ridehailing.logistics.common.domain.enums.PaymentMethod;
+import com.ridehailing.logistics.common.domain.enums.PaymentStatus;
 import com.ridehailing.logistics.common.domain.enums.WalletEntryType;
+import com.ridehailing.logistics.payment.domain.entity.Payment;
 import com.ridehailing.logistics.payment.domain.entity.Wallet;
 import com.ridehailing.logistics.payment.domain.entity.WalletEntry;
 import com.ridehailing.logistics.payment.dto.response.WalletEntryResponse;
@@ -20,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -144,5 +148,126 @@ class PaymentServiceImplTest {
     assertEquals(walletId, result.getId());
     assertEquals(driverId, result.getDriverId());
     verify(walletRepository).insertWalletIfNotExists(driverId);
+  }
+
+  @Test
+  @DisplayName("processCancellationPenalty should succeed for cashless and credit driver wallet")
+  void shouldProcessCancellationPenaltyForCashlessAndCreditDriverWallet() {
+    UUID tripId = UUID.randomUUID();
+    UUID customerId = UUID.randomUUID();
+    BigDecimal fee = new BigDecimal("15000.00");
+    String idempKey = "PENALTY-TRIP-" + tripId;
+
+    when(paymentRepository.findByIdempotencyKey(idempKey)).thenReturn(Optional.empty());
+    when(paymentRepository.save(any(Payment.class))).thenAnswer(inv -> inv.getArgument(0));
+    when(walletRepository.findByDriverIdForUpdate(driverId)).thenReturn(Optional.of(wallet));
+
+    paymentService.processCancellationPenalty(
+        tripId, customerId, driverId, fee, PaymentMethod.WALLET, idempKey);
+
+    ArgumentCaptor<Payment> paymentCaptor = ArgumentCaptor.forClass(Payment.class);
+    verify(paymentRepository, times(1)).save(paymentCaptor.capture());
+    Payment savedPayment = paymentCaptor.getValue();
+    assertEquals(tripId, savedPayment.getTripId());
+    assertEquals(customerId, savedPayment.getCustomerId());
+    assertEquals(fee, savedPayment.getAmount());
+    assertEquals(PaymentMethod.WALLET, savedPayment.getProvider());
+    assertEquals(PaymentStatus.SUCCEEDED, savedPayment.getStatus());
+    assertNotNull(savedPayment.getPaidAt());
+
+    assertEquals(new BigDecimal("115000.00"), wallet.getBalance());
+    verify(walletRepository, times(1)).save(wallet);
+
+    ArgumentCaptor<WalletEntry> entryCaptor = ArgumentCaptor.forClass(WalletEntry.class);
+    verify(walletEntryRepository, times(1)).save(entryCaptor.capture());
+    WalletEntry savedEntry = entryCaptor.getValue();
+    assertEquals(walletId, savedEntry.getWalletId());
+    assertEquals(tripId, savedEntry.getTripId());
+    assertEquals(WalletEntryType.PENALTY, savedEntry.getEntryType());
+    assertEquals(fee, savedEntry.getAmount());
+    assertEquals(new BigDecimal("115000.00"), savedEntry.getBalanceAfter());
+    assertEquals("TRIP_CANCELLATION", savedEntry.getReferenceType());
+    assertEquals(tripId.toString(), savedEntry.getReferenceId());
+    assertEquals("POSTED", savedEntry.getStatus());
+  }
+
+  @Test
+  @DisplayName("processCancellationPenalty should set status PENDING for CASH payment")
+  void shouldProcessCancellationPenaltyForCashWithPendingStatus() {
+    UUID tripId = UUID.randomUUID();
+    UUID customerId = UUID.randomUUID();
+    BigDecimal fee = new BigDecimal("10000.00");
+    String idempKey = "PENALTY-TRIP-" + tripId;
+
+    when(paymentRepository.findByIdempotencyKey(idempKey)).thenReturn(Optional.empty());
+    when(paymentRepository.save(any(Payment.class))).thenAnswer(inv -> inv.getArgument(0));
+    when(walletRepository.findByDriverIdForUpdate(driverId)).thenReturn(Optional.of(wallet));
+
+    paymentService.processCancellationPenalty(
+        tripId, customerId, driverId, fee, PaymentMethod.CASH, idempKey);
+
+    ArgumentCaptor<Payment> paymentCaptor = ArgumentCaptor.forClass(Payment.class);
+    verify(paymentRepository, times(1)).save(paymentCaptor.capture());
+    Payment savedPayment = paymentCaptor.getValue();
+    assertEquals(PaymentStatus.PENDING, savedPayment.getStatus());
+    assertNull(savedPayment.getPaidAt());
+
+    assertEquals(new BigDecimal("110000.00"), wallet.getBalance());
+    verify(walletRepository, times(1)).save(wallet);
+    verify(walletEntryRepository, times(1)).save(any(WalletEntry.class));
+  }
+
+  @Test
+  @DisplayName("processCancellationPenalty should skip when idempotency key already exists")
+  void shouldSkipWhenIdempotencyKeyAlreadyExists() {
+    UUID tripId = UUID.randomUUID();
+    UUID customerId = UUID.randomUUID();
+    BigDecimal fee = new BigDecimal("10000.00");
+    String idempKey = "PENALTY-TRIP-" + tripId;
+
+    Payment existingPayment = Payment.builder().idempotencyKey(idempKey).build();
+    when(paymentRepository.findByIdempotencyKey(idempKey)).thenReturn(Optional.of(existingPayment));
+
+    paymentService.processCancellationPenalty(
+        tripId, customerId, driverId, fee, PaymentMethod.WALLET, idempKey);
+
+    verify(paymentRepository, never()).save(any(Payment.class));
+    verify(walletRepository, never()).save(any(Wallet.class));
+    verify(walletEntryRepository, never()).save(any(WalletEntry.class));
+  }
+
+  @Test
+  @DisplayName("processCancellationPenalty should skip when fee is zero or null")
+  void shouldSkipWhenCancellationFeeIsZeroOrNull() {
+    UUID tripId = UUID.randomUUID();
+    UUID customerId = UUID.randomUUID();
+    String idempKey = "PENALTY-TRIP-" + tripId;
+
+    paymentService.processCancellationPenalty(
+        tripId, customerId, driverId, BigDecimal.ZERO, PaymentMethod.WALLET, idempKey);
+    paymentService.processCancellationPenalty(
+        tripId, customerId, driverId, null, PaymentMethod.WALLET, idempKey);
+
+    verify(paymentRepository, never()).findByIdempotencyKey(any());
+    verify(paymentRepository, never()).save(any(Payment.class));
+  }
+
+  @Test
+  @DisplayName("processCancellationPenalty should process payment without crediting wallet when driverId is null")
+  void shouldProcessPenaltyWithoutDriverIfDriverIdNull() {
+    UUID tripId = UUID.randomUUID();
+    UUID customerId = UUID.randomUUID();
+    BigDecimal fee = new BigDecimal("10000.00");
+    String idempKey = "PENALTY-TRIP-" + tripId;
+
+    when(paymentRepository.findByIdempotencyKey(idempKey)).thenReturn(Optional.empty());
+    when(paymentRepository.save(any(Payment.class))).thenAnswer(inv -> inv.getArgument(0));
+
+    paymentService.processCancellationPenalty(
+        tripId, customerId, null, fee, PaymentMethod.WALLET, idempKey);
+
+    verify(paymentRepository, times(1)).save(any(Payment.class));
+    verify(walletRepository, never()).findByDriverIdForUpdate(any());
+    verify(walletEntryRepository, never()).save(any(WalletEntry.class));
   }
 }

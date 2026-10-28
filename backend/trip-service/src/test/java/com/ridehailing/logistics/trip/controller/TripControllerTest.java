@@ -51,6 +51,7 @@ class TripControllerTest {
             TripStatus.IN_TRIP,
             UUID.randomUUID(),
             new BigDecimal("60000"),
+            BigDecimal.ZERO,
             "VND",
             PaymentMethod.CASH,
             Instant.now(),

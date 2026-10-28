@@ -61,4 +61,43 @@ class TripAfterCommitEventListenerTest {
     verify(outboxEventRepository, times(1))
         .markEventAsProcessed(eq(tripId.toString()), eq("TripCompleted"), any(Instant.class));
   }
+
+  @Test
+  @DisplayName("handleTripCancelled should forward trip to eventProducer after commit")
+  void shouldForwardTripCancelledToProducer() {
+    Trip trip = Trip.builder().id(UUID.randomUUID()).tripCode("TRP-CANCEL-99").build();
+    TripCancelledInternalEvent event = new TripCancelledInternalEvent(trip);
+
+    listener.handleTripCancelled(event);
+
+    verify(eventProducer, times(1)).publishTripCancelled(eq(trip), any());
+  }
+
+  @Test
+  @DisplayName("handleTripCancelled callback should mark outbox event as PROCESSED")
+  void shouldMarkOutboxEventAsProcessedOnCancelledCallback() {
+    UUID tripId = UUID.randomUUID();
+    Trip trip = Trip.builder().id(tripId).tripCode("TRP-CANCEL-99").build();
+    TripCancelledInternalEvent event = new TripCancelledInternalEvent(trip);
+
+    doAnswer(
+            invocation -> {
+              Runnable callback = invocation.getArgument(1);
+              if (callback != null) {
+                callback.run();
+              }
+              return null;
+            })
+        .when(eventProducer)
+        .publishTripCancelled(eq(trip), any());
+
+    when(outboxEventRepository.markEventAsProcessed(
+            eq(tripId.toString()), eq("TripCancelled"), any(Instant.class)))
+        .thenReturn(1);
+
+    listener.handleTripCancelled(event);
+
+    verify(outboxEventRepository, times(1))
+        .markEventAsProcessed(eq(tripId.toString()), eq("TripCancelled"), any(Instant.class));
+  }
 }

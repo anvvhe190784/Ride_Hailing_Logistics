@@ -18,6 +18,14 @@ public interface PaymentService {
       PaymentMethod method,
       String idempotencyKey);
 
+  void processCancellationPenalty(
+      UUID tripId,
+      UUID customerId,
+      UUID driverId,
+      BigDecimal cancellationFee,
+      PaymentMethod paymentMethod,
+      String idempotencyKey);
+
   WalletResponse getWalletByDriver(UUID driverId);
 
   List<WalletEntryResponse> getWalletStatement(UUID driverId);

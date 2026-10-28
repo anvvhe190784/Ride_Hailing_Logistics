@@ -146,6 +146,82 @@ public class PaymentServiceImpl implements PaymentService {
   }
 
   @Override
+  @Transactional
+  public void processCancellationPenalty(
+      UUID tripId,
+      UUID customerId,
+      UUID driverId,
+      BigDecimal cancellationFee,
+      PaymentMethod paymentMethod,
+      String idempotencyKey) {
+    if (cancellationFee == null || cancellationFee.compareTo(BigDecimal.ZERO) <= 0) {
+      log.info("No cancellation penalty for trip ID {}", tripId);
+      return;
+    }
+
+    // FR-PAY-003, BR-015: Idempotency check
+    Optional<Payment> existingOpt = paymentRepository.findByIdempotencyKey(idempotencyKey);
+    if (existingOpt.isPresent()) {
+      log.info(
+          "Idempotent cancellation penalty detected for key {}. Returning existing record.",
+          idempotencyKey);
+      return;
+    }
+
+    PaymentMethod effectiveMethod = paymentMethod != null ? paymentMethod : PaymentMethod.CASH;
+    PaymentStatus status =
+        (effectiveMethod == PaymentMethod.CASH) ? PaymentStatus.PENDING : PaymentStatus.SUCCEEDED;
+
+    Payment payment =
+        Payment.builder()
+            .tripId(tripId)
+            .customerId(customerId)
+            .amount(cancellationFee)
+            .provider(effectiveMethod)
+            .status(status)
+            .providerRef("SIM-PENALTY-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase())
+            .idempotencyKey(idempotencyKey)
+            .paidAt(status == PaymentStatus.SUCCEEDED ? Instant.now() : null)
+            .build();
+
+    payment = paymentRepository.save(payment);
+    log.info(
+        "Processed cancellation penalty payment ID {} for Trip ID {}, amount: {} VND, status: {}",
+        payment.getId(),
+        tripId,
+        cancellationFee,
+        status);
+
+    if (driverId != null) {
+      Wallet wallet = getOrCreateWallet(driverId);
+      BigDecimal newBalance = wallet.getBalance().add(cancellationFee);
+      wallet.setBalance(newBalance);
+      walletRepository.save(wallet);
+
+      WalletEntry entry =
+          WalletEntry.builder()
+              .walletId(wallet.getId())
+              .tripId(tripId)
+              .entryType(WalletEntryType.PENALTY)
+              .amount(cancellationFee)
+              .balanceAfter(newBalance)
+              .referenceType("TRIP_CANCELLATION")
+              .referenceId(tripId.toString())
+              .description("Compensation fee for cancelled trip " + tripId)
+              .status("POSTED")
+              .build();
+
+      walletEntryRepository.save(entry);
+      log.info(
+          "Credited cancellation compensation for trip {}: driver {}, +{} VND, new balance: {} VND",
+          tripId,
+          driverId,
+          cancellationFee,
+          newBalance);
+    }
+  }
+
+  @Override
   @Transactional(readOnly = true)
   public WalletResponse getWalletByDriver(UUID driverId) {
     return WalletResponse.fromEntity(findWalletOrThrow(driverId));

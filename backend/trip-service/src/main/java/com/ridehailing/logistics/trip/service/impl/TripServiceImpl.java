@@ -6,6 +6,7 @@ import com.ridehailing.logistics.common.domain.enums.TripStatus;
 import com.ridehailing.logistics.common.dto.ApiResponse;
 import com.ridehailing.logistics.common.dto.FareQuoteResponse;
 import com.ridehailing.logistics.common.event.EventEnvelope;
+import com.ridehailing.logistics.common.event.TripCancelledEvent;
 import com.ridehailing.logistics.common.event.TripCompletedEvent;
 import com.ridehailing.logistics.common.exception.BaseDomainException;
 import com.ridehailing.logistics.common.lock.RedisDistributedLockService;
@@ -20,6 +21,7 @@ import com.ridehailing.logistics.trip.dto.DriverOfferResponse;
 import com.ridehailing.logistics.trip.dto.NearbyDriverResponse;
 import com.ridehailing.logistics.trip.dto.TripDetailResponse;
 import com.ridehailing.logistics.trip.dto.response.CancellationFeeResponse;
+import com.ridehailing.logistics.trip.event.TripCancelledInternalEvent;
 import com.ridehailing.logistics.trip.event.TripCompletedInternalEvent;
 import com.ridehailing.logistics.trip.repository.DriverOfferRepository;
 import com.ridehailing.logistics.trip.repository.OutboxEventRepository;
@@ -436,7 +438,7 @@ public class TripServiceImpl implements TripService {
 
     BigDecimal calculatedFee = BigDecimal.ZERO;
     if (nextStatus == TripStatus.CANCELLED) {
-      calculatedFee = calculateCancellationFee(trip, currentStatus, actorRole);
+      calculatedFee = calculateCancellationFee(trip, currentStatus, actorId, actorRole);
     }
 
     trip.setStatus(nextStatus);
@@ -492,6 +494,12 @@ public class TripServiceImpl implements TripService {
         trip.setCancellationReason(
             isAdminOrSupport ? "Cancelled by staff/admin " + actorId : "Cancelled by " + actorId);
       }
+      if (calculatedFee != null && calculatedFee.compareTo(BigDecimal.ZERO) > 0) {
+        // Persist Transactional Outbox Event within the same DB transaction
+        saveTripCancelledOutboxEvent(trip);
+        // Publish Spring internal event; listener will publish Kafka event AFTER_COMMIT
+        applicationEventPublisher.publishEvent(new TripCancelledInternalEvent(trip));
+      }
     }
   }
 
@@ -521,7 +529,18 @@ public class TripServiceImpl implements TripService {
             .orElseThrow(
                 () -> BaseDomainException.notFound(ERR_TRIP_NOT_FOUND, MSG_TRIP_NOT_FOUND));
 
-    BigDecimal fee = calculateCancellationFee(trip, trip.getStatus(), actorRole);
+    boolean isParticipant =
+        actorId.equals(trip.getCustomerId())
+            || (trip.getDriverId() != null && actorId.equals(trip.getDriverId()));
+    boolean isAdminOrStaff =
+        "ADMIN".equalsIgnoreCase(actorRole) || "SUPPORT_STAFF".equalsIgnoreCase(actorRole);
+
+    if (!isParticipant && !isAdminOrStaff) {
+      throw BaseDomainException.forbidden(
+          "FORBIDDEN_ACCESS", "You are not authorized to view cancellation fee for this trip");
+    }
+
+    BigDecimal fee = calculateCancellationFee(trip, trip.getStatus(), actorId, actorRole);
     boolean gracePeriodActive = isGracePeriodActive(trip, trip.getStatus());
     String policy;
     if (fee.compareTo(BigDecimal.ZERO) != 0) {
@@ -539,6 +558,9 @@ public class TripServiceImpl implements TripService {
     if (currentStatus == TripStatus.MATCHING || currentStatus == TripStatus.CREATED) {
       return true;
     }
+    if (currentStatus != TripStatus.ACCEPTED && currentStatus != TripStatus.PICKING_UP) {
+      return false;
+    }
     if (trip.getAcceptedAt() == null) {
       return true;
     }
@@ -547,9 +569,13 @@ public class TripServiceImpl implements TripService {
   }
 
   private BigDecimal calculateCancellationFee(
-      Trip trip, TripStatus currentStatus, String actorRole) {
+      Trip trip, TripStatus currentStatus, UUID actorId, String actorRole) {
     // Staff/Admin or Driver cancellations do not incur penalty on customer
-    if ("ADMIN".equalsIgnoreCase(actorRole) || "DRIVER".equalsIgnoreCase(actorRole)) {
+    boolean isStaffOrAdmin =
+        "ADMIN".equalsIgnoreCase(actorRole) || "SUPPORT_STAFF".equalsIgnoreCase(actorRole);
+    boolean isDriver =
+        "DRIVER".equalsIgnoreCase(actorRole) || (actorId != null && actorId.equals(trip.getDriverId()));
+    if (isStaffOrAdmin || isDriver) {
       return CANCELLATION_FEE_ZERO;
     }
 
@@ -604,6 +630,7 @@ public class TripServiceImpl implements TripService {
         t.getStatus(),
         t.getQuoteId(),
         t.getFinalFare(),
+        t.getCancellationFee(),
         t.getCurrency(),
         t.getPaymentMethod(),
         t.getCreatedAt(),
@@ -666,6 +693,50 @@ public class TripServiceImpl implements TripService {
           "Failed to persist OutboxEvent for trip ID {}: {}", trip.getId(), ex.getMessage(), ex);
       throw BaseDomainException.internalError(
           "OUTBOX_PERSIST_ERROR", "Failed to record trip completion outbox event");
+    }
+  }
+
+  private void saveTripCancelledOutboxEvent(Trip trip) {
+    try {
+      TripCancelledEvent event =
+          TripCancelledEvent.builder()
+              .tripId(trip.getId())
+              .tripCode(trip.getTripCode())
+              .customerId(trip.getCustomerId())
+              .driverId(trip.getDriverId())
+              .cancellationFee(
+                  trip.getCancellationFee() != null ? trip.getCancellationFee() : BigDecimal.ZERO)
+              .currency(trip.getCurrency())
+              .paymentMethod(trip.getPaymentMethod())
+              .cancelledBy(trip.getCancelledBy())
+              .cancellationReason(trip.getCancellationReason())
+              .cancelledAt(trip.getCancelledAt() != null ? trip.getCancelledAt() : Instant.now())
+              .build();
+
+      EventEnvelope<TripCancelledEvent> envelope =
+          EventEnvelope.of("TripCancelled", "trip-service", UUID.randomUUID().toString(), event);
+      String jsonPayload = objectMapper.writeValueAsString(envelope);
+
+      OutboxEvent outboxEvent =
+          OutboxEvent.builder()
+              .aggregateType("TRIP")
+              .aggregateId(trip.getId().toString())
+              .eventType("TripCancelled")
+              .payload(jsonPayload)
+              .status("PENDING")
+              .retryCount(0)
+              .build();
+
+      outboxEventRepository.save(outboxEvent);
+      log.info("Saved OutboxEvent for cancelled trip ID {}", trip.getId());
+    } catch (Exception ex) {
+      log.error(
+          "Failed to persist OutboxEvent for cancelled trip ID {}: {}",
+          trip.getId(),
+          ex.getMessage(),
+          ex);
+      throw BaseDomainException.internalError(
+          "OUTBOX_PERSIST_ERROR", "Failed to record trip cancellation outbox event");
     }
   }
 }

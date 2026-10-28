@@ -17,7 +17,7 @@ public class KafkaConsumerConfig {
     DeadLetterPublishingRecoverer recoverer =
         new DeadLetterPublishingRecoverer(
             kafkaOperations,
-            (consumerRecord, ex) -> new TopicPartition("trip.completed.DLT", -1));
+            (consumerRecord, ex) -> new TopicPartition(consumerRecord.topic() + ".DLT", -1));
 
     ExponentialBackOffWithMaxRetries backOff = new ExponentialBackOffWithMaxRetries(3);
     backOff.setInitialInterval(1000L);

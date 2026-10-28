@@ -16,6 +16,7 @@ public record TripDetailResponse(
     TripStatus status,
     UUID quoteId,
     BigDecimal finalFare,
+    BigDecimal cancellationFee,
     String currency,
     PaymentMethod paymentMethod,
     Instant createdAt,

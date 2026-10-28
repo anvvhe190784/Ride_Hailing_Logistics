@@ -21,6 +21,7 @@ import com.ridehailing.logistics.trip.dto.DriverOfferResponse;
 import com.ridehailing.logistics.trip.dto.NearbyDriverResponse;
 import com.ridehailing.logistics.trip.dto.TripDetailResponse;
 import com.ridehailing.logistics.trip.dto.response.CancellationFeeResponse;
+import com.ridehailing.logistics.trip.event.TripCancelledInternalEvent;
 import com.ridehailing.logistics.trip.event.TripCompletedInternalEvent;
 import com.ridehailing.logistics.trip.repository.DriverOfferRepository;
 import com.ridehailing.logistics.trip.repository.OutboxEventRepository;
@@ -346,6 +347,7 @@ class TripServiceImplTest {
             TripStatus.MATCHING,
             quoteId,
             new BigDecimal("50000"),
+            BigDecimal.ZERO,
             "VND",
             PaymentMethod.CASH,
             Instant.now(),
@@ -411,10 +413,12 @@ class TripServiceImplTest {
     assertNotNull(response);
     assertEquals(TripStatus.CANCELLED, response.status());
     assertEquals(BigDecimal.ZERO, trip.getCancellationFee());
+    verify(applicationEventPublisher, never()).publishEvent(any(TripCancelledInternalEvent.class));
+    verify(outboxEventRepository, never()).save(any(OutboxEvent.class));
   }
 
   @Test
-  @DisplayName("FR-CAN-003: Customer cancels after 3 minutes in PICKING_UP should incur 10,000 VND fee")
+  @DisplayName("FR-CAN-003: Customer cancels after 3 minutes in PICKING_UP should incur 10,000 VND fee and save outbox event")
   void shouldChargePenaltyFeeWhenCustomerCancelsAfterGracePeriod() {
     UUID tripId = UUID.randomUUID();
     UUID driverId = UUID.randomUUID();
@@ -438,10 +442,12 @@ class TripServiceImplTest {
     assertNotNull(response);
     assertEquals(TripStatus.CANCELLED, response.status());
     assertEquals(new BigDecimal("10000.00"), trip.getCancellationFee());
+    verify(outboxEventRepository, times(1)).save(any(OutboxEvent.class));
+    verify(applicationEventPublisher, times(1)).publishEvent(any(TripCancelledInternalEvent.class));
   }
 
   @Test
-  @DisplayName("FR-CAN-003: Customer cancels when driver ARRIVED should incur 15,000 VND fee")
+  @DisplayName("FR-CAN-003: Customer cancels when driver ARRIVED should incur 15,000 VND fee and save outbox event")
   void shouldChargePenaltyFeeWhenCustomerCancelsWhenDriverArrived() {
     UUID tripId = UUID.randomUUID();
     UUID driverId = UUID.randomUUID();
@@ -466,6 +472,8 @@ class TripServiceImplTest {
     assertNotNull(response);
     assertEquals(TripStatus.CANCELLED, response.status());
     assertEquals(new BigDecimal("15000.00"), trip.getCancellationFee());
+    verify(outboxEventRepository, times(1)).save(any(OutboxEvent.class));
+    verify(applicationEventPublisher, times(1)).publishEvent(any(TripCancelledInternalEvent.class));
   }
 
   @Test
