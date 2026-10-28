@@ -46,6 +46,7 @@ class LocationServiceImplTest {
 
   @BeforeEach
   void setUp() {
+    lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
     locationService =
         new LocationServiceImpl(locationRepository, redisTemplate, telemetryHistoryRepository);
   }
@@ -261,5 +262,49 @@ class LocationServiceImplTest {
     assertTrue(drivers.isEmpty());
     verify(locationRepository, times(1))
         .findAvailableDriversNearby(eq(lat), eq(lng), eq(3000.0), any(), eq(10));
+  }
+
+  @Test
+  void shouldFilterOutOfflineDriversFromDatabaseFallbackWhenRedisMarksThemOffline() {
+    double lat = 21.028511;
+    double lng = 105.854444;
+
+    when(redisTemplate.opsForGeo()).thenReturn(geoOperations);
+    when(geoOperations.radius(eq("geo:drivers:available"), any(Circle.class), any(GeoRadiusCommandArgs.class)))
+        .thenReturn(new GeoResults<>(Collections.emptyList()));
+
+    UUID offlineDriverId = UUID.randomUUID();
+    UUID availableDriverId = UUID.randomUUID();
+
+    NearbyDriverProjection offlineProj = mock(NearbyDriverProjection.class);
+    when(offlineProj.getDriverId()).thenReturn(offlineDriverId);
+    when(offlineProj.getLatitude()).thenReturn(lat);
+    when(offlineProj.getLongitude()).thenReturn(lng);
+    when(offlineProj.getDistanceMeters()).thenReturn(100.0);
+
+    NearbyDriverProjection availableProj = mock(NearbyDriverProjection.class);
+    when(availableProj.getDriverId()).thenReturn(availableDriverId);
+    when(availableProj.getLatitude()).thenReturn(lat + 0.001);
+    when(availableProj.getLongitude()).thenReturn(lng + 0.001);
+    when(availableProj.getDistanceMeters()).thenReturn(200.0);
+
+    when(locationRepository.findAvailableDriversNearby(eq(lat), eq(lng), eq(3000.0), any(), eq(10)))
+        .thenReturn(List.of(offlineProj, availableProj));
+
+    when(valueOperations.get("driver:availability:" + offlineDriverId)).thenReturn("OFFLINE");
+    when(valueOperations.get("driver:availability:" + availableDriverId)).thenReturn("AVAILABLE");
+
+    DriverLatestLocation offlineLoc =
+        DriverLatestLocation.builder().driverId(offlineDriverId).isAvailable(true).build();
+    when(locationRepository.findById(offlineDriverId)).thenReturn(Optional.of(offlineLoc));
+
+    List<NearbyDriverResponse> drivers =
+        locationService.findNearbyDrivers(lat, lng, 3000.0, 10);
+
+    assertNotNull(drivers);
+    assertEquals(1, drivers.size());
+    assertEquals(availableDriverId, drivers.get(0).driverId());
+    assertFalse(offlineLoc.isAvailable());
+    verify(locationRepository, times(1)).save(offlineLoc);
   }
 }

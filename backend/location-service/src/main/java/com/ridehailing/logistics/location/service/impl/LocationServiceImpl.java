@@ -200,7 +200,7 @@ public class LocationServiceImpl implements LocationService {
           List<NearbyDriverResponse> nearbyDrivers = new ArrayList<>();
           for (GeoResult<RedisGeoCommands.GeoLocation<String>> result : geoResults) {
             NearbyDriverResponse driver = mapGeoResultToNearbyDriver(result, latitude, longitude);
-            if (driver != null) {
+            if (driver != null && isDriverAvailable(driver.driverId())) {
               nearbyDrivers.add(driver);
             }
           }
@@ -225,7 +225,38 @@ public class LocationServiceImpl implements LocationService {
             p ->
                 new NearbyDriverResponse(
                     p.getDriverId(), p.getLatitude(), p.getLongitude(), p.getDistanceMeters()))
+        .filter(d -> isDriverAvailable(d.driverId()))
         .toList();
+  }
+
+  private boolean isDriverAvailable(UUID driverId) {
+    if (redisTemplate != null) {
+      try {
+        String avail =
+            redisTemplate.opsForValue().get(REDIS_DRIVER_AVAILABILITY_PREFIX + driverId);
+        if (avail != null) {
+          boolean available = "AVAILABLE".equalsIgnoreCase(avail);
+          if (!available) {
+            locationRepository
+                .findById(driverId)
+                .ifPresent(
+                    loc -> {
+                      if (loc.isAvailable()) {
+                        loc.setAvailable(false);
+                        locationRepository.save(loc);
+                      }
+                    });
+          }
+          return available;
+        }
+      } catch (Exception ex) {
+        log.warn(
+            "Failed to check driver availability in Redis for driver {}: {}",
+            driverId,
+            ex.getMessage());
+      }
+    }
+    return true;
   }
 
   private NearbyDriverResponse mapGeoResultToNearbyDriver(
