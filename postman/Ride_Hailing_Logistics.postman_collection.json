@@ -302,7 +302,25 @@
                 "logout"
               ]
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var customerToken = pm.environment.get(\"customer_token\");",
+                  "if (customerToken) {",
+                  "    pm.environment.set(\"blacklisted_token\", customerToken);",
+                  "    console.log(\"Saved blacklisted_token: \" + customerToken);",
+                  "}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "1.8 Re-login Customer (Fresh Token for Tests)",
@@ -347,6 +365,89 @@
               ]
             }
           }
+        },
+        {
+          "name": "1.9 Get Current User Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customer_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "me"
+              ]
+            },
+            "description": "Lấy thông tin tài khoản hiện tại từ Bearer Token JWT (xác thực User ID, Email, Số điện thoại và Vai trò)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"User profile attributes valid\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property(\"id\");",
+                  "    pm.expect(jsonData.data).to.have.property(\"phone\");",
+                  "    pm.expect(jsonData.data.role).to.eql(\"CUSTOMER\");",
+                  "    pm.expect(jsonData.data.status).to.eql(\"ACTIVE\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.10 Demo 401 Unauthorized: Blacklisted Token access",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{blacklisted_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "me"
+              ]
+            },
+            "description": "Demo kiểm chứng cơ chế thu hồi Token (Token Revocation & Blacklist) lưu trong Redis. Token sau khi Logout sẽ bị Gateway từ chối ngay với 401 Unauthorized."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 401 Unauthorized due to Blacklisted Token\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -354,6 +455,149 @@
       "name": "02. Driver Operations & KYC (Driver Service)",
       "description": "Quản lý vòng đời tài xế, nộp hồ sơ, Admin phê duyệt hồ sơ KYC, và cập nhật trạng thái hoạt động.",
       "item": [
+        {
+          "name": "2.0 Driver Submit KYC",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{driver_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idCardNumber\": \"001090000001\",\n  \"dateOfBirth\": \"1992-05-15\",\n  \"address\": \"Số 12 Tràng Tiền, Hoàn Kiếm, Hà Nội\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/drivers/kyc",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "drivers",
+                "kyc"
+              ]
+            },
+            "description": "Tài xế tự nộp hồ sơ KYC (CCCD, Ngày sinh, Địa chỉ). Hệ thống chuyển reviewStatus sang PENDING_REVIEW và xóa cache Redis hồ sơ tài xế."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"KYC status is PENDING_REVIEW\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.reviewStatus).to.eql(\"PENDING_REVIEW\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.0.1 Driver Register Vehicle",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{driver_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"BIKE\",\n  \"licensePlate\": \"29B2-77827\",\n  \"brand\": \"Yamaha\",\n  \"model\": \"Exciter 155\",\n  \"color\": \"Xanh GP\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/drivers/vehicles",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "drivers",
+                "vehicles"
+              ]
+            },
+            "description": "Tài xế đăng ký phương tiện mới vào hệ thống (xe máy/ô tô). Phương tiện khởi tạo ở trạng thái ACTIVE/PENDING_APPROVAL."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 201 Created or 200 OK\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "pm.test(\"Vehicle registered successfully\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property(\"licensePlate\");",
+                  "    pm.expect(jsonData.data).to.have.property(\"type\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.0.2 Driver Get My Vehicles",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{driver_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/drivers/vehicles",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "drivers",
+                "vehicles"
+              ]
+            },
+            "description": "Tài xế tra cứu danh sách tất cả các phương tiện đã đăng ký của mình."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Vehicles array returned\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
         {
           "name": "2.1 Get My Driver Profile",
           "request": {
@@ -402,6 +646,91 @@
               ]
             }
           }
+        },
+        {
+          "name": "2.2.1 Get Driver Profile by ID - Customer View (PII Masked)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customer_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/drivers/{{new_driver_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "drivers",
+                "{{new_driver_id}}"
+              ]
+            },
+            "description": "Khách hàng tra cứu hồ sơ tài xế -> CCCD và Địa chỉ tự động che dạng ***MASKED*** nhằm bảo vệ quyền riêng tư theo tiêu chuẩn PII."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Sensitive PII is masked with ***MASKED***\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.idCardNumber).to.eql(\"***MASKED***\");",
+                  "    pm.expect(jsonData.data.address).to.eql(\"***MASKED***\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.2.2 Get Driver Profile by ID - Admin View (Unmasked)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/drivers/{{new_driver_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "drivers",
+                "{{new_driver_id}}"
+              ]
+            },
+            "description": "Quản trị viên (Admin) tra cứu hồ sơ tài xế -> Hiển thị đầy đủ CCCD và Địa chỉ gốc phục vụ việc thẩm định hồ sơ."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Admin views unmasked KYC details\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.idCardNumber).to.not.eql(\"***MASKED***\");",
+                  "});"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "2.3 Driver Set Availability (AVAILABLE)",
@@ -667,6 +996,52 @@
               ]
             }
           }
+        },
+        {
+          "name": "4.3 Direct Consume Fare Quote",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customer_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/pricing/quotes/{{quote_id}}/consume?customerId={{customer_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pricing",
+                "quotes",
+                "{{quote_id}}",
+                "consume"
+              ],
+              "query": [
+                {
+                  "key": "customerId",
+                  "value": "{{customer_id}}"
+                }
+              ]
+            },
+            "description": "Tiêu thụ báo giá giá cước trực tiếp. Sau khi tiêu thụ, cờ is_used chuyển thành true và không thể tái sử dụng để tạo chuyến mới theo luật BR-005."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 OK or 409 Conflict if already consumed\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 409]);",
+                  "});"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -774,6 +1149,54 @@
               ]
             }
           }
+        },
+        {
+          "name": "5.1.2 Driver Reject Offer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{driver_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"response\": \"REJECTED\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/trips/offers/{{offer_id}}/respond",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "trips",
+                "offers",
+                "{{offer_id}}",
+                "respond"
+              ]
+            },
+            "description": "Tài xế bấm từ chối nhận chuyến xe. Trạng thái Offer chuyển thành REJECTED."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 OK or 400 Bad Request if offer not in PENDING\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 400, 409]);",
+                  "});"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "5.2 Driver Respond to Offer (Accept Trip)",
@@ -1050,6 +1473,96 @@
               ]
             }
           }
+        },
+        {
+          "name": "5.10 Support Staff Emergency Cancel Trip",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{support_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/trips/{{trip_id}}/status?nextStatus=CANCELLED",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "trips",
+                "{{trip_id}}",
+                "status"
+              ],
+              "query": [
+                {
+                  "key": "nextStatus",
+                  "value": "CANCELLED"
+                }
+              ]
+            },
+            "description": "Hỗ trợ viên CSKH can thiệp hủy chuyến trong trường hợp khẩn cấp (tai nạn, hỏng xe), tự động miễn phí phạt cho khách hàng."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 OK or 400/409 if already completed\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 400, 409]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5.11 Admin Force Cancel Trip",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/trips/{{trip_id}}/status?nextStatus=CANCELLED",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "trips",
+                "{{trip_id}}",
+                "status"
+              ],
+              "query": [
+                {
+                  "key": "nextStatus",
+                  "value": "CANCELLED"
+                }
+              ]
+            },
+            "description": "Quản trị viên tối cao (Admin) cưỡng chế hủy chuyến xe khi phát hiện sự cố hệ thống hoặc gian lận."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 OK or 400/409\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 400, 409]);",
+                  "});"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -1131,6 +1644,50 @@
                   "});"
                 ],
                 "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "6.3 Check Driver Wallet After Trip Completion",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{driver_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/payments/wallets/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "payments",
+                "wallets",
+                "me"
+              ]
+            },
+            "description": "Kiểm tra biến động số dư ví tài xế sau khi chuyến xe hoàn thành và Kafka Consumer xử lý cộng cước / thu phí nền tảng."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Driver wallet details returned\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property(\"balance\");",
+                  "    pm.expect(jsonData.data).to.have.property(\"currency\");",
+                  "});"
+                ]
               }
             }
           ]
@@ -1320,6 +1877,242 @@
               ]
             }
           }
+        },
+        {
+          "name": "7.5 Demo 403 Forbidden: Driver Attempts to Approve KYC",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{driver_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/drivers/{{new_driver_id}}/approve",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "drivers",
+                "{{new_driver_id}}",
+                "approve"
+              ]
+            },
+            "description": "Kiểm chứng phân quyền RBAC: Tài xế cố tình tự duyệt hồ sơ hoặc duyệt hồ sơ của người khác -> Bị Gateway & Service từ chối với mã 403 Forbidden."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 403 Forbidden\", function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "7.6 Demo 409 Conflict: Expired or Reused Fare Quote",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customer_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/pricing/quotes/{{quote_id}}/consume?customerId={{customer_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pricing",
+                "quotes",
+                "{{quote_id}}",
+                "consume"
+              ],
+              "query": [
+                {
+                  "key": "customerId",
+                  "value": "{{customer_id}}"
+                }
+              ]
+            },
+            "description": "Kiểm chứng luật BR-005: Tiêu thụ lại một báo giá đã được sử dụng trước đó -> Bị từ chối với mã 409 Conflict (QUOTE_ALREADY_USED)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 409 Conflict (QUOTE_ALREADY_USED)\", function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "08. Observability, SRE & Health Probes (DevOps)",
+      "description": "Các endpoint giám sát sức khỏe, Kubernetes Health Probes và Eureka Service Registry phục vụ vận hành production và ngăn chặn hiện tượng Cascading Restart.",
+      "item": [
+        {
+          "name": "8.1 API Gateway Actuator Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/actuator/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            },
+            "description": "Kiểm tra tình trạng sức khỏe tổng thể của API Gateway và các kết nối hạ tầng."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Health status is UP\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.eql(\"UP\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "8.2 Liveness Probe - Process Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/actuator/health/liveness",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "actuator",
+                "health",
+                "liveness"
+              ]
+            },
+            "description": "Kubernetes Liveness Probe chỉ kiểm tra tiến trình JVM sống/chết (livenessState). Không kiểm tra DB/Kafka bên ngoài để tránh khởi động lại hàng loạt khi mạng chập chờn."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Liveness status is UP\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.eql(\"UP\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "8.3 Readiness Probe - Dependency Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/actuator/health/readiness",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "actuator",
+                "health",
+                "readiness"
+              ]
+            },
+            "description": "Kubernetes Readiness Probe kiểm tra khả năng sẵn sàng phục vụ lưu lượng (readinessState & ping)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Readiness status is UP\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.eql(\"UP\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "8.4 Eureka Service Registry Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8761/eureka/apps",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8761",
+              "path": [
+                "eureka",
+                "apps"
+              ]
+            },
+            "description": "Truy vấn danh sách các microservices đang đăng ký hoạt động trên Netflix Eureka Service Discovery."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
         }
       ]
     }
